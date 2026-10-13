@@ -33,6 +33,7 @@ main = do
       , commonPropsTests
       , styleParityTests
       , textParityTests
+      , tableParityTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -522,6 +523,43 @@ textParityTests =
         map reverse (rowsOf 180) @?= rowsOf 0
         take 1 (rowsOf 90) /= drop 2 (rowsOf 90) @? "top and bottom differ"
     ]
+
+tableParityTests :: TestTree
+tableParityTests =
+  testGroup
+    "table parity"
+    [ testCase "height shows an overflow row" $
+        plainLines (table (height 7) ["N", "What"] numbered)
+          @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "│1│row │", "│…│…   │", "╰─┴────╯"]
+    , testCase "yOffset scrolls" $ do
+        take 2 (drop 3 (plainLines (table (height 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
+        visibleRows (height 7 <> yOffset 4) ["N", "What"] numbered @?= (4, 5)
+    , testCase "scrolled to the end, earlier rows fill the space" $ do
+        visibleRows (height 7 <> yOffset 9) ["N", "What"] numbered @?= (7, 9)
+        visibleRows (height 7 <> yOffset 99) ["N", "What"] numbered @?= (7, 9)
+    , testCase "all rows without a height" $
+        visibleRows mempty ["N"] numbered @?= (0, 9)
+    , testCase "row rules count towards the height" $
+        plainLines (table (height 8 <> rowRules True <> border asciiBorder) [] numbered)
+          -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
+          -- a third row would need 7.
+          @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
+    , testCase "too small for any row" $ do
+        visibleRows (height 3) ["N"] numbered @?= (0, -1)
+        blockHeight (table (height 3) ["N"] numbered) @?= 3
+    , testCase "fitContent does not stretch" $
+        plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
+          @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "╰─┴────╯"]
+    , testCase "fitContent still shrinks to the width" $
+        blockWidth (table (width 8 <> fitContent) ["Number", "What"] [["0", "row"]]) @?= 8
+    , testCase "headers are cut, not wrapped" $
+        plainLines (table (width 8) ["Header text", "H"] [["a", "b"]])
+          @?= ["╭────┬─╮", "│Hea…│H│", "├────┼─┤", "│a   │b│", "╰────┴─╯"]
+    , testProperty "a table never exceeds its height" $ \(Positive h) (TableData hs rs) ->
+        blockHeight (table (height h) hs rs) <= h
+    ]
+  where
+    numbered = [[plain (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
 
 renderTests :: TestTree
 renderTests =

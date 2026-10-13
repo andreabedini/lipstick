@@ -189,6 +189,9 @@ module Lipstick
   , headerRule
   , columnRules
   , rowRules
+  , yOffset
+  , fitContent
+  , visibleRows
 
     -- * Lists and trees
   , Outline
