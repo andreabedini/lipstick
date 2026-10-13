@@ -247,7 +247,7 @@ tableTests =
         toAnsi defaultRenderEnv (table (border hiddenBorder <> borderTop False <> borderBottom False <> headerRule False <> columnRules False <> headerStyle bold) ["H"] [["b"]])
           @?= " \ESC[0;1mH\ESC[0m \n b "
     , testCase "cell positions" $ do
-        let b = table (cellStyle (\c -> if cellRow c == 1 && cellColumn c == 0 then fg red else mempty) <> border hiddenBorder) ["h"] [["a"], ["b"]]
+        let b = table (cellStyle (\c -> if cellRow c == Just 1 && cellColumn c == 0 then fg red else mempty) <> border hiddenBorder) ["h"] [["a"], ["b"]]
         assertBool "only the second body row is red" $
           T.count "\ESC[0;31m" (toAnsi defaultRenderEnv b) == 1 && "\ESC[0;31mb" `T.isInfixOf` toAnsi defaultRenderEnv b
     , testCase "border colour" $

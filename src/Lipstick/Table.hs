@@ -3,7 +3,7 @@
 -- > table
 -- >   (  border roundedBorder <> borderFg purple
 -- >   <> headerStyle (bold <> align center)
--- >   <> cellStyle (\c -> padding 0 1 <> if even (cellRow c) then fg grey else mempty)
+-- >   <> cellStyle (\c -> padding 0 1 <> if maybe False even (cellRow c) then fg grey else mempty)
 -- >   <> width 60 )
 -- >   ["Language", "Formal", "Informal"]
 -- >   [["Chinese", "您好", "你好"], ["Japanese", "こんにちは", "やあ"]]
@@ -36,11 +36,11 @@ import Lipstick.Width (textWidth)
 data TableCell = HeaderCell !Int | BodyCell !Int !Int
   deriving (Eq, Show)
 
--- | The body row of a cell, or -1 for the header.
-cellRow :: TableCell -> Int
+-- | The body row of a cell, or 'Nothing' for the header.
+cellRow :: TableCell -> Maybe Int
 cellRow = \case
-  HeaderCell _ -> -1
-  BodyCell r _ -> r
+  HeaderCell _ -> Nothing
+  BodyCell r _ -> Just r
 
 cellColumn :: TableCell -> Int
 cellColumn = \case
