@@ -23,6 +23,7 @@ module Lipstick
   , frame
   , inherit
   , tabWidth
+  , inline
 
     -- * Blocks
   , Block
@@ -34,6 +35,7 @@ module Lipstick
   , Inline
   , plain
   , styled
+  , fromAnsi
   , Attrs
 
     -- * Layout
@@ -86,12 +88,15 @@ module Lipstick
   , marginBottom
   , marginLeft
   , marginBg
+  , paddingChar
+  , marginChar
 
     -- * Borders
   , Border (..)
   , border
   , borderFg
   , borderBg
+  , borderFgBlend
   , borderTop
   , borderRight
   , borderBottom
@@ -131,6 +136,7 @@ module Lipstick
 
     -- * Measuring text
   , textWidth
+  , unicodeVersion
   ) where
 
 import Lipstick.Ansi
@@ -142,4 +148,4 @@ import Lipstick.Mod
 import Lipstick.Place
 import Lipstick.Style
 import Lipstick.Terminal
-import Lipstick.Width (textWidth)
+import Lipstick.Width (textWidth, unicodeVersion)

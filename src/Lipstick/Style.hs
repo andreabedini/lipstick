@@ -5,12 +5,15 @@ module Lipstick.Style
   , render
   , frame
   , tabWidth
+  , inline
   , resolveStyle
   , inherit
   ) where
 
 import Data.Maybe (fromMaybe)
+import Data.Text qualified as T
 import Lipstick.Border
+import Lipstick.Color (Color, blend)
 import Lipstick.Internal.Block
 import Lipstick.Internal.Types
 import Lipstick.Mod
@@ -23,6 +26,7 @@ data Style = Style
   , styleSize :: !Size
   , styleAlign :: !Align
   , styleTabWidth :: !Int
+  , styleInline :: !Bool
   }
   deriving (Eq, Show)
 
@@ -42,7 +46,7 @@ instance HasAlign Style where
   overAlign f s = s {styleAlign = f (styleAlign s)}
 
 defStyle :: Style
-defStyle = Style mempty defBox defBorderProps defSize defAlign 4
+defStyle = Style mempty defBox defBorderProps defSize defAlign 4 False
 
 -- | The style a modifier produces from the defaults.
 resolveStyle :: Mod Style -> Style
@@ -51,6 +55,11 @@ resolveStyle m = appMod m defStyle
 -- | How many spaces a tab becomes (default 4).
 tabWidth :: Int -> Mod Style
 tabWidth n = Mod (\s -> s {styleTabWidth = max 0 n})
+
+-- | Render on a single line: newlines are removed, and padding, margins,
+-- border, size and alignment are ignored, except 'maxWidth'.
+inline :: Mod Style
+inline = Mod (\s -> s {styleInline = True})
 
 -- | Apply a parent style, keeping the padding and margins already set:
 -- lipgloss's @Inherit@.
@@ -66,7 +75,11 @@ render m inl =
       wrapped = case contentWidth s of
         Just w -> concatMap (wrapCells w) ls
         Nothing -> ls
-   in layout s wrapped
+   in if styleInline s
+        then
+          let oneLine = overCellAttrs (styleAttrs s <>) [concat ls]
+           in fromCellLines (maybe oneLine (\n -> map (cropCells n) oneLine) (sizeMaxWidth (styleSize s)))
+        else layout s wrapped
 
 -- | Put an existing block in a box. The block is not re-wrapped: if it is
 -- wider than the 'width' allows, the box grows.
@@ -100,7 +113,7 @@ layout :: Style -> [[Cell]] -> Block
 layout s content0 =
   let attrs = styleAttrs s
       fill = fillAttrs attrs
-      Box (Sides pt pr pb pl) (Sides mt mr mb ml) mbg = styleBox s
+      Box (Sides pt pr pb pl) (Sides mt mr mb ml) mbg pch mch = styleBox s
       Size _ hgt maxW maxH = styleSize s
       Align ah av = styleAlign s
       bp = styleBorder s
@@ -123,10 +136,11 @@ layout s content0 =
 
       -- Padding.
       padW = pl + innerW + pr
+      padCells = fillCells fill (T.singleton pch)
       padded =
-        replicate pt (blankCells fill padW)
-          ++ [blankCells fill pl ++ l ++ blankCells fill pr | l <- tall]
-          ++ replicate pb (blankCells fill padW)
+        replicate pt (padCells padW)
+          ++ [padCells pl ++ l ++ padCells pr | l <- tall]
+          ++ replicate pb (padCells padW)
 
       -- Border.
       ba = mempty {attrFg = borderFgColor bp, attrBg = borderBgColor bp}
@@ -138,20 +152,53 @@ layout s content0 =
       sideL = if edgeLeft edges then piece (leftEdge chars) bl else []
       sideR = if edgeRight edges then piece (rightEdge chars) br else []
       bordered =
-        [topRow | edgeTop edges]
-          ++ [sideL ++ l ++ sideR | l <- padded]
-          ++ [bottomRow | edgeBottom edges]
+        blendBorder (borderFgStops bp) edges (length sideL) (length sideR) $
+          [topRow | edgeTop edges]
+            ++ [sideL ++ l ++ sideR | l <- padded]
+            ++ [bottomRow | edgeBottom edges]
 
       -- Margins.
       ma = mempty {attrBg = mbg}
       boxW = bl + padW + br
       outerW = ml + boxW + mr
+      marginCells = fillCells ma (T.singleton mch)
       margined =
-        replicate mt (blankCells ma outerW)
-          ++ [blankCells ma ml ++ l ++ blankCells ma mr | l <- bordered]
-          ++ replicate mb (blankCells ma outerW)
+        replicate mt (marginCells outerW)
+          ++ [marginCells ml ++ l ++ marginCells mr | l <- bordered]
+          ++ replicate mb (marginCells outerW)
 
       -- Cropping.
       croppedW = maybe margined (\n -> map (cropCells n) margined) maxW
       cropped = maybe croppedW (`take` croppedW) maxH
    in fromCellLines cropped
+
+-- | Recolour the border cells with a gradient, clockwise from the top-left.
+-- The rows are the bordered box; @nl@ and @nr@ are the number of cells in
+-- the left and right border columns.
+blendBorder :: [Color] -> Edges -> Int -> Int -> [[Cell]] -> [[Cell]]
+blendBorder [] _ _ _ rows = rows
+blendBorder stops edges nl nr rows =
+  let (topRows, rest) = splitAt (if edgeTop edges then 1 else 0) rows
+      (middleRows, bottomRows) = splitAt (length rest - (if edgeBottom edges then 1 else 0)) rest
+      n = sum (map length topRows) + length middleRows * (nr + nl) + sum (map length bottomRows)
+      colors = blend n stops
+      (cTop, c1) = splitAt (sum (map length topRows)) colors
+      (cRight, c2) = splitAt (length middleRows * nr) c1
+      (cBottom, cLeft) = splitAt (sum (map length bottomRows)) c2
+      paint cs cells = zipWith (\c cell -> cell {cellAttrs = (cellAttrs cell) {attrFg = Just c}}) cs cells
+      rightCols = chunks nr cRight
+      leftCols = reverse (chunks nl cLeft)
+      middle' =
+        [ let (l, rest') = splitAt nl row
+              (inner, r) = splitAt (length rest' - nr) rest'
+           in paint (reverse lc) l ++ inner ++ paint rc r
+        | (row, lc, rc) <- zip3 middleRows (leftCols ++ repeat []) (rightCols ++ repeat [])
+        ]
+   in [paint cTop row | row <- topRows]
+        ++ middle'
+        ++ [reverse (paint cBottom (reverse row)) | row <- bottomRows]
+  where
+    chunks k xs
+      | k <= 0 = []
+      | null xs = []
+      | otherwise = let (a, b) = splitAt k xs in a : chunks k b

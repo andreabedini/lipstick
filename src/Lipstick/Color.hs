@@ -20,6 +20,16 @@ module Lipstick.Color
   , brightBlack, brightRed, brightGreen, brightYellow
   , brightBlue, brightMagenta, brightCyan, brightWhite
 
+    -- * Manipulating colours
+    -- | These work in the OkLab colour space, so steps look even. Palette
+    -- colours are converted to RGB using xterm's palette, and adaptive
+    -- colours are transformed in every variant.
+  , mix
+  , blend
+  , darken
+  , lighten
+  , complementary
+
     -- * Terminal colours
   , TermColor (..)
   , ColorProfile (..)
@@ -221,3 +231,105 @@ nearest16 (r, g, b) =
     dist (x, y, z) = sq x r + sq y g + sq z b
     sq :: Word8 -> Word8 -> Int
     sq x y = let d = fromIntegral x - fromIntegral y in d * d
+
+-- Manipulating colours ----------------------------------------------------------
+
+data OkLab = OkLab !Double !Double !Double
+
+-- | Apply a function to every concrete colour inside an adaptive one.
+mapConcrete :: (Color -> Color) -> Color -> Color
+mapConcrete f = \case
+  LightDark l d -> LightDark (mapConcrete f l) (mapConcrete f d)
+  Complete tc c256 c16 -> Complete (mapConcrete f tc) (mapConcrete f c256) (mapConcrete f c16)
+  c -> f c
+
+mapOkLab :: (OkLab -> OkLab) -> Color -> Color
+mapOkLab f = mapConcrete (fromOkLab . f . toOkLab)
+
+-- | Move a colour a fraction (0–1) of the way to black.
+darken :: Double -> Color -> Color
+darken k = mapOkLab (lerpOkLab (clamp01 k) (OkLab 0 0 0))
+
+-- | Move a colour a fraction (0–1) of the way to white.
+lighten :: Double -> Color -> Color
+lighten k = mapOkLab (lerpOkLab (clamp01 k) (OkLab 1 0 0))
+
+lerpOkLab :: Double -> OkLab -> OkLab -> OkLab
+lerpOkLab k (OkLab l2 a2 b2) (OkLab l1 a1 b1) =
+  OkLab (l1 + (l2 - l1) * k) (a1 + (a2 - a1) * k) (b1 + (b2 - b1) * k)
+
+-- | The colour on the opposite side of the colour wheel, with the same
+-- lightness.
+complementary :: Color -> Color
+complementary = mapOkLab (\(OkLab l a b) -> OkLab l (negate a) (negate b))
+
+-- | @mix t c1 c2@ is @c1@ at 0, @c2@ at 1, and in between otherwise.
+mix :: Double -> Color -> Color -> Color
+mix t c1 c2 = case (c1, c2) of
+  (LightDark l1 d1, _) -> LightDark (mix t l1 (variant False c2)) (mix t d1 (variant True c2))
+  (_, LightDark l2 d2) -> LightDark (mix t (variant False c1) l2) (mix t (variant True c1) d2)
+  _ ->
+    fromOkLab (lerpOkLab (clamp01 t) (toOkLab c2) (toOkLab c1))
+  where
+    variant dark = \case
+      LightDark l d -> variant dark (if dark then d else l)
+      c -> c
+
+-- | @blend n stops@ is a gradient of @n@ colours going evenly through the
+-- stops, starting at the first and ending at the last.
+blend :: Int -> [Color] -> [Color]
+blend n stops = case stops of
+  [] -> []
+  [c] -> replicate n c
+  _ | n <= 0 -> []
+  _ | n == 1 -> take 1 stops
+  _ -> [at (fromIntegral i / fromIntegral (n - 1)) | i <- [0 .. n - 1]]
+  where
+    segments = fromIntegral (length stops - 1) :: Double
+    at t =
+      let x = t * segments
+          i = min (length stops - 2) (floor x)
+       in mix (x - fromIntegral i) (stops !! i) (stops !! (i + 1))
+
+clamp01 :: Double -> Double
+clamp01 = max 0 . min 1
+
+-- | Adaptive colours are taken in their true-colour, dark-background form.
+toOkLab :: Color -> OkLab
+toOkLab c = case c of
+  LightDark _ d -> toOkLab d
+  Complete tc _ _ -> toOkLab tc
+  RGB r g b -> fromRGB r g b
+  Color256 n -> let (r, g, b) = termColorRGB (TC256 n) in fromRGB r g b
+  Color16 n -> let (r, g, b) = termColorRGB (TC16 n) in fromRGB r g b
+  where
+    fromRGB r g b =
+      let lr = linear r
+          lg = linear g
+          lb = linear b
+          l = cbrt (0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+          m = cbrt (0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+          s = cbrt (0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+       in OkLab
+            (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s)
+            (1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s)
+            (0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
+    linear v =
+      let x = fromIntegral v / 255 :: Double
+       in if x <= 0.04045 then x / 12.92 else ((x + 0.055) / 1.055) ** 2.4
+    cbrt x = signum x * abs x ** (1 / 3)
+
+fromOkLab :: OkLab -> Color
+fromOkLab (OkLab ll a b) =
+  let l = cube (ll + 0.3963377774 * a + 0.2158037573 * b)
+      m = cube (ll - 0.1055613458 * a - 0.0638541728 * b)
+      s = cube (ll - 0.0894841775 * a - 1.2914855480 * b)
+   in RGB
+        (gamma (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s))
+        (gamma (-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s))
+        (gamma (-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s))
+  where
+    cube x = x * x * x
+    gamma x =
+      let v = if x <= 0.0031308 then 12.92 * x else 1.055 * x ** (1 / 2.4) - 0.055
+       in round (255 * clamp01 v)

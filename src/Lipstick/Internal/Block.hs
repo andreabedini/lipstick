@@ -188,7 +188,8 @@ plain :: Text -> Inline
 plain t = Inline [(mempty, t)]
 
 -- | Split inline text into lines of cells. Tabs become @tabWidth@ spaces;
--- other control characters are dropped.
+-- other control characters, including escape sequences' ESC, are dropped.
+-- Use 'Lipstick.Ansi.fromAnsi' for text that contains escape sequences.
 inlineLines :: Int -> Inline -> [[Cell]]
 inlineLines tabWidth (Inline segs) = splitLines (concatMap segment segs)
   where
@@ -197,7 +198,9 @@ inlineLines tabWidth (Inline segs) = splitLines (concatMap segment segs)
         [ [Right (Cell a c w) | (c, w) <- clusters (sanitise part)] ++ [Left () | not lastPart]
         | (part, lastPart) <- markLast (T.splitOn (T.singleton '\n') t)
         ]
-    sanitise = T.filter (\c -> c >= ' ' && c /= '\DEL') . T.replace (T.singleton '\t') (T.replicate tabWidth (T.singleton ' '))
+    sanitise = T.filter isPrintable . T.replace (T.singleton '\t') (T.replicate tabWidth (T.singleton ' '))
+    -- Drop C0 and C1 controls (and DEL): they could start escape sequences.
+    isPrintable c = c >= ' ' && (c < '\DEL' || c > '\x9F')
     markLast xs = zip xs (map (const False) (drop 1 xs) ++ [True])
 
     splitLines xs = case break (either (const True) (const False)) xs of

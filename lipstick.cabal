@@ -11,6 +11,9 @@ author:          Andrea Bedini
 maintainer:      andrea@bedini.au
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
+extra-source-files:
+    scripts/GenUnicodeTable.hs
+    test/data/GraphemeBreakTest.txt
 
 common warnings
     ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -31,8 +34,10 @@ library
         Lipstick.Width
         Lipstick.Internal.Block
         Lipstick.Internal.Types
+        Lipstick.Internal.UnicodeTable
     build-depends:
         base ^>=4.21.0.0,
+        array ^>=0.5,
         text ^>=2.1,
         ansi-terminal ^>=1.1,
         colour ^>=2.3

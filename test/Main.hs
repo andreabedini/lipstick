@@ -2,22 +2,31 @@
 
 module Main (main) where
 
+import Data.Char (chr)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.IO qualified as T
 import Lipstick
 import Lipstick.Terminal (profileFromEnv)
+import Lipstick.Width (clusters)
+import Numeric (readHex)
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck (testProperty)
 
 main :: IO ()
-main =
+main = do
+  graphemeCases <- readGraphemeTests "test/data/GraphemeBreakTest.txt"
   defaultMain $
     testGroup
       "lipstick"
       [ widthTests
+      , graphemeTests graphemeCases
       , colorTests
+      , blendTests
+      , fromAnsiTests
+      , extrasTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -39,6 +48,46 @@ widthTests =
     , testCase "ZWJ sequence is one cluster" $ textWidth "👩\x200D💻" @?= 2
     , testCase "flag is one cluster" $ textWidth "🇮🇹" @?= 2
     , testCase "VS16 makes text emoji wide" $ textWidth "❤\xFE0F" @?= 2
+    , testCase "VS15 makes emoji narrow" $ textWidth "⌚\xFE0E" @?= 1
+    , testCase "keycap" $ textWidth "1\xFE0F\x20E3" @?= 2
+    , testCase "skin tone modifier" $ textWidth "👍🏽" @?= 2
+    , testCase "family ZWJ sequence" $ textWidth "👨\x200D👩\x200D👧" @?= 2
+    , testCase "precomposed Hangul" $ textWidth "한국" @?= 4
+    , testCase "conjoining Hangul jamo" $ textWidth "\x1112\x1161\x11AB" @?= 2
+    , testCase "Devanagari conjunct is one cluster" $ length (clusters "क्ष") @?= 1
+    , testCase "zero width space" $ textWidth "a\x200B\&b" @?= 2
+    , testCase "ambiguous width is narrow" $ textWidth "±" @?= 1
+    , testCase "CJK extension B" $ textWidth "\x20000" @?= 2
+    , testCase "unicode version" $ unicodeVersion @?= "16.0.0"
+    ]
+
+-- | Test cases from the Unicode conformance file: the text and its
+-- expected clusters.
+readGraphemeTests :: FilePath -> IO [(Text, [Text])]
+readGraphemeTests path = do
+  contents <- T.readFile path
+  pure
+    [ (T.concat cs, cs)
+    | l <- T.lines contents
+    , not (T.null l)
+    , not ("#" `T.isPrefixOf` l)
+    , let cs = map (T.pack . map hexChar . filter (/= "×") . T.words) (filter (not . T.null . T.strip) (T.splitOn "÷" l))
+    ]
+  where
+    hexChar w = case readHex (T.unpack w) of
+      [(n, "")] -> chr n
+      _ -> error ("bad code point " ++ show w)
+
+graphemeTests :: [(Text, [Text])] -> TestTree
+graphemeTests cases =
+  testGroup
+    "grapheme clusters (UAX #29 conformance)"
+    [ testCase "file has test cases" $ assertBool "no cases" (length cases > 1000)
+    , testCase "all cases" $ do
+        let failures = [(t, expected, map fst (clusters t)) | (t, expected) <- cases, map fst (clusters t) /= expected]
+        assertBool
+          (show (length failures) ++ " failures, first: " ++ show (take 3 failures))
+          (null failures)
     ]
 
 colorTests :: TestTree
@@ -60,6 +109,97 @@ colorTests =
         resolveColor TrueColor False (lightDark "1" "2") @?= Just (TC16 1)
     , testCase "complete" $
         resolveColor ANSI256 True (complete "#ff0000" "100" "3") @?= Just (TC256 100)
+    ]
+
+blendTests :: TestTree
+blendTests =
+  testGroup
+    "colour manipulation"
+    [ testCase "blend endpoints" $
+        blend 3 ["#ff0000", "#0000ff"] @?= ["#ff0000", RGB 140 83 162, "#0000ff"]
+    , testCase "blend through three stops" $ do
+        let cs = blend 5 ["#000000", "#ffffff", "#000000"]
+        length cs @?= 5
+        cs !! 2 @?= "#ffffff"
+        last cs @?= "#000000"
+    , testCase "blend degenerate" $ do
+        blend 0 ["#ff0000", "#0000ff"] @?= []
+        blend 1 ["#ff0000", "#0000ff"] @?= ["#ff0000"]
+        blend 2 ["#123456"] @?= ["#123456", "#123456"]
+    , testCase "darken fully is black" $ darken 1 "#7D56F4" @?= "#000000"
+    , testCase "lighten fully is white" $ lighten 1 "#7D56F4" @?= "#ffffff"
+    , testCase "complementary of grey is grey" $ complementary "#808080" @?= "#808080"
+    , testCase "adaptive colours stay adaptive" $
+        darken 1 (lightDark "#ffffff" "#eeeeee") @?= lightDark "#000000" "#000000"
+    , testCase "mixing adaptive with plain" $
+        mix 0 (lightDark "#ff0000" "#00ff00") "#0000ff" @?= lightDark "#ff0000" "#00ff00"
+    , testCase "palette colours become RGB" $ mix 0 red red @?= RGB 205 0 0
+    , testProperty "OkLab round trip" $ \r g b ->
+        mix 0 (RGB r g b) (RGB r g b) === RGB r g b
+    ]
+
+fromAnsiTests :: TestTree
+fromAnsiTests =
+  testGroup
+    "fromAnsi"
+    [ testCase "plain text" $ parsed "hello" @?= "hello"
+    , testCase "SGR round trip" $
+        parsed "\ESC[1;31mred\ESC[0m plain" @?= "\ESC[0;1;31mred\ESC[0m plain"
+    , testCase "256 and RGB colours" $
+        parsed "\ESC[38;5;200;48;2;1;2;3mx" @?= "\ESC[0;38;5;200;48;2;1;2;3mx\ESC[0m"
+    , testCase "colon forms" $
+        parsed "\ESC[4:3;58:2::10:20:30;38:5:9mx" @?= "\ESC[0;4:3;91;58;2;10;20;30mx\ESC[0m"
+    , testCase "off codes unset" $
+        parsed "\ESC[1;3;31mA\ESC[22;39mB" @?= "\ESC[0;1;3;31mA\ESC[0;3mB\ESC[0m"
+    , testCase "empty SGR resets" $ parsed "\ESC[1mA\ESC[mB" @?= "\ESC[0;1mA\ESC[0mB"
+    , testCase "hyperlink with ST" $
+        parsed "\ESC]8;;http://a\ESC\\x\ESC]8;;\ESC\\y" @?= "\ESC]8;;http://a\ESC\\x\ESC]8;;\ESC\\y"
+    , testCase "hyperlink with BEL" $
+        parsed "\ESC]8;id=1;http://a\ax\ESC]8;;\a" @?= "\ESC]8;;http://a\ESC\\x\ESC]8;;\ESC\\"
+    , testCase "other sequences are dropped" $
+        parsed "\ESC[2K\ESC(Bab\ESC]0;title\acd\ESC7" @?= "abcd"
+    , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
+    , testCase "keeps the outer style" $
+        toAnsi defaultRenderEnv (render (bg "4") (fromAnsi "\ESC[1ma\ESC[0mb"))
+          @?= "\ESC[0;1;44ma\ESC[0;44mb\ESC[0m"
+    , testCase "width ignores escapes" $
+        blockWidth (render (border normalBorder) (fromAnsi "\ESC[31mred\ESC[0m")) @?= 5
+    , testProperty "toAnsi . fromAnsi . toAnsi = toAnsi" $ \spec (StyledText inl) ->
+        let b = render (specMod spec) inl
+            out = toAnsi defaultRenderEnv b
+         in toAnsi defaultRenderEnv (fromInline (fromAnsi out)) === out
+    ]
+  where
+    parsed = toAnsi defaultRenderEnv . fromInline . fromAnsi
+
+extrasTests :: TestTree
+extrasTests =
+  testGroup
+    "style extras"
+    [ testCase "inline ignores the box" $
+        plainLines (render (inline <> padding 1 1 <> border normalBorder <> width 20) "a\nb") @?= ["ab"]
+    , testCase "inline respects maxWidth" $
+        plainLines (render (inline <> maxWidth 3) "abcdef") @?= ["abc"]
+    , testCase "inline keeps attributes" $
+        toAnsi defaultRenderEnv (render (inline <> bold) "a\nb") @?= "\ESC[0;1mab\ESC[0m"
+    , testCase "padding char" $
+        plainLines (render (padding 1 1 <> paddingChar '.') "x") @?= ["...", ".x.", "..."]
+    , testCase "margin char" $
+        plainLines (render (margin 0 2 <> marginChar '~') "x") @?= ["~~x~~"]
+    , testCase "border gradient" $ do
+        let b = render (border normalBorder <> borderFgBlend [red, blue]) "hi"
+            ls = T.lines (toAnsi defaultRenderEnv b)
+        renderPlain b @?= "┌──┐\n│hi│\n└──┘"
+        case ls of
+          [l1, l2, _] -> do
+            assertBool "top-left corner is the first stop" $
+              "\ESC[0;38;2;205;0;0m┌\ESC[" `T.isPrefixOf` l1
+            assertBool "left border of the middle row is the last stop" $
+              "\ESC[0;38;2;0;0;238m│" `T.isPrefixOf` l2
+          _ -> assertFailure (show ls)
+    , testCase "borderFg clears a gradient" $
+        render (border normalBorder <> borderFgBlend [red, blue] <> borderFg green) "x"
+          @?= render (border normalBorder <> borderFg green) "x"
     ]
 
 renderTests :: TestTree
@@ -201,6 +341,25 @@ instance Arbitrary StyleSpec where
       <*> ((,) <$> chooseInt (0, 2) <*> chooseInt (0, 2))
       <*> arbitrary
 
+-- | Inline text made of segments with random attributes.
+newtype StyledText = StyledText Inline
+  deriving (Show)
+
+instance Arbitrary StyledText where
+  arbitrary = do
+    segs <- listOf $ do
+      Words t <- arbitrary
+      m <- mconcat <$> sublistOf attrMods
+      pure (styled m t)
+    pure (StyledText (mconcat segs))
+    where
+      attrMods =
+        [ bold, italic, faint, strikethrough, reverseVideo, underline
+        , underlineStyle CurlyUnderline, underlineColor "#00ff00"
+        , fg "#ff8000", fg "200", fg red, bg "#102030", bg brightCyan
+        , link "https://example.com"
+        ]
+
 specMod :: StyleSpec -> Mod Style
 specMod (StyleSpec w (pv, ph) (mv, mh) b) =
   maybe mempty width w
@@ -211,10 +370,12 @@ specMod (StyleSpec w (pv, ph) (mv, mh) b) =
 -- | Every line of the plain output is exactly as wide as the block says.
 rectangular :: Block -> Property
 rectangular b =
-  let ls = plainLines b
+  -- Split on newlines exactly: T.lines would drop a trailing empty line,
+  -- and an empty block still renders as one (empty) line of text.
+  let ls = T.splitOn "\n" (renderPlain b)
    in counterexample (show ls) $
         conjoin
-          [ length ls === blockHeight b
+          [ length ls === max 1 (blockHeight b)
           , conjoin [textWidth l === blockWidth b | l <- ls]
           ]
 

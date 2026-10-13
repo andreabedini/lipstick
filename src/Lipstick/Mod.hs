@@ -66,11 +66,14 @@ module Lipstick.Mod
   , marginBottom
   , marginLeft
   , marginBg
+  , paddingChar
+  , marginChar
 
     -- * Borders
   , border
   , borderFg
   , borderBg
+  , borderFgBlend
   , borderTop
   , borderRight
   , borderBottom
@@ -138,11 +141,13 @@ data Box = Box
   { boxPadding :: !(Sides Int)
   , boxMargin :: !(Sides Int)
   , boxMarginBg :: !(Maybe Color)
+  , boxPaddingChar :: !Char
+  , boxMarginChar :: !Char
   }
   deriving (Eq, Show)
 
 defBox :: Box
-defBox = Box (uniformSides 0) (uniformSides 0) Nothing
+defBox = Box (uniformSides 0) (uniformSides 0) Nothing ' ' ' '
 
 -- | A border is drawn when its characters are set or any side is switched
 -- on explicitly. Sides left as 'Nothing' are drawn only when the
@@ -152,11 +157,13 @@ data BorderProps = BorderProps
   , borderSides :: !(Sides (Maybe Bool))
   , borderFgColor :: !(Maybe Color)
   , borderBgColor :: !(Maybe Color)
+  , borderFgStops :: ![Color]
+  -- ^ when not empty, a gradient that replaces 'borderFgColor'
   }
   deriving (Eq, Show)
 
 defBorderProps :: BorderProps
-defBorderProps = BorderProps Nothing (uniformSides Nothing) Nothing Nothing
+defBorderProps = BorderProps Nothing (uniformSides Nothing) Nothing Nothing []
 
 -- | Width and height include padding and border, but not margins.
 data Size = Size
@@ -262,6 +269,14 @@ marginLeft n = marginMod (\s -> s {sideLeft = n})
 marginBg :: HasBox f => Color -> Mod f
 marginBg c = Mod (overBox (\b -> b {boxMarginBg = Just c}))
 
+-- | The character padding is filled with (default a space).
+paddingChar :: HasBox f => Char -> Mod f
+paddingChar c = Mod (overBox (\b -> b {boxPaddingChar = c}))
+
+-- | The character margins are filled with (default a space).
+marginChar :: HasBox f => Char -> Mod f
+marginChar c = Mod (overBox (\b -> b {boxMarginChar = c}))
+
 -- Borders ---------------------------------------------------------------------
 
 borderMod :: HasBorder f => (BorderProps -> BorderProps) -> Mod f
@@ -272,8 +287,13 @@ border :: HasBorder f => Border -> Mod f
 border b = borderMod (\p -> p {borderChars = Just b})
 
 borderFg, borderBg :: HasBorder f => Color -> Mod f
-borderFg c = borderMod (\p -> p {borderFgColor = Just c})
+borderFg c = borderMod (\p -> p {borderFgColor = Just c, borderFgStops = []})
 borderBg c = borderMod (\p -> p {borderBgColor = Just c})
+
+-- | Colour the border with a gradient through these colours, going
+-- clockwise from the top-left corner.
+borderFgBlend :: HasBorder f => [Color] -> Mod f
+borderFgBlend cs = borderMod (\p -> p {borderFgStops = cs})
 
 borderTop, borderRight, borderBottom, borderLeft :: HasBorder f => Bool -> Mod f
 borderTop v = borderSide (\s -> s {sideTop = Just v})

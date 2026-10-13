@@ -1,0 +1,179 @@
+-- | Generate src/Lipstick/Internal/UnicodeTable.hs from the Unicode
+-- Character Database.
+--
+-- Usage:
+--
+-- > runghc scripts/GenUnicodeTable.hs VERSION UCD_DIR > src/Lipstick/Internal/UnicodeTable.hs
+--
+-- where UCD_DIR contains EastAsianWidth.txt, GraphemeBreakProperty.txt,
+-- emoji-data.txt and DerivedCoreProperties.txt, downloaded from
+-- https://www.unicode.org/Public/VERSION/ucd/ (the second lives in
+-- auxiliary/, the third in emoji/). Use the Unicode version of the GHC
+-- you build with (GHC.Unicode.unicodeVersion).
+--
+-- The table maps every code point to a packed Word16:
+--
+-- * bits 0–3: grapheme cluster break property (see gcbCode)
+-- * bit 4: East Asian Width is W or F
+-- * bit 5: Extended_Pictographic
+-- * bit 6: Emoji
+-- * bits 7–8: Indic_Conjunct_Break (0 None, 1 Linker, 2 Consonant, 3 Extend)
+--
+-- and is stored run-length encoded as the start of each run and its value.
+module Main (main) where
+
+import Control.Monad (forM_, when)
+import Data.Array.ST (newArray, readArray, runSTUArray, writeArray)
+import Data.Array.Unboxed (UArray, assocs)
+import Data.Bits (complement, shiftL, (.&.), (.|.))
+import Data.Char (isSpace)
+import Data.List (intercalate, isPrefixOf)
+import Data.Word (Word16)
+import Numeric (readHex)
+import System.Environment (getArgs)
+import System.FilePath ((</>))
+
+main :: IO ()
+main = do
+  [version, dir] <- getArgs
+  eaw <- readFile (dir </> "EastAsianWidth.txt")
+  gcb <- readFile (dir </> "GraphemeBreakProperty.txt")
+  emoji <- readFile (dir </> "emoji-data.txt")
+  dcp <- readFile (dir </> "DerivedCoreProperties.txt")
+
+  let wide =
+        [ r
+        | (r, [w]) <- missing eaw ++ entries eaw
+        , w `elem` ["W", "F"]
+        ]
+      -- @missing lines give defaults and come first, so later explicit
+      -- entries override them; record which ranges are explicitly not wide.
+      notWide = [r | (r, [w]) <- entries eaw, w `notElem` ["W", "F"]]
+      gcbs = [(r, gcbCode p) | (r, [p]) <- entries gcb]
+      pict = [r | (r, ["Extended_Pictographic"]) <- entries emoji]
+      emo = [r | (r, ["Emoji"]) <- entries emoji]
+      incb = [(r, incbCode v) | (r, ["InCB", v]) <- entries dcp]
+
+      table :: UArray Int Word16
+      table = runSTUArray $ do
+        arr <- newArray (0, 0x10FFFF) 0
+        let paint (lo, hi) f = forM_ [lo .. hi] $ \i -> readArray arr i >>= writeArray arr i . f
+        forM_ wide $ \r -> paint r (.|. bit 4)
+        forM_ notWide $ \r -> paint r (.&. complement (bit 4))
+        forM_ gcbs $ \(r, v) -> paint r (\x -> (x .&. complement 0xF) .|. v)
+        forM_ pict $ \r -> paint r (.|. bit 5)
+        forM_ emo $ \r -> paint r (.|. bit 6)
+        forM_ incb $ \(r, v) -> paint r (\x -> (x .&. complement (3 `shiftL` 7)) .|. (v `shiftL` 7))
+        pure arr
+
+      runs = compress (assocs table)
+
+  when (null runs) (error "empty table")
+  putStr (render version runs)
+
+bit :: Int -> Word16
+bit n = 1 `shiftL` n
+
+gcbCode :: String -> Word16
+gcbCode p = case p of
+  "CR" -> 1
+  "LF" -> 2
+  "Control" -> 3
+  "Extend" -> 4
+  "ZWJ" -> 5
+  "Regional_Indicator" -> 6
+  "Prepend" -> 7
+  "SpacingMark" -> 8
+  "L" -> 9
+  "V" -> 10
+  "T" -> 11
+  "LV" -> 12
+  "LVT" -> 13
+  _ -> error ("unknown grapheme break property " ++ p)
+
+incbCode :: String -> Word16
+incbCode v = case v of
+  "Linker" -> 1
+  "Consonant" -> 2
+  "Extend" -> 3
+  _ -> error ("unknown InCB value " ++ v)
+
+-- | Data lines: a code point range and the semicolon-separated fields.
+entries :: String -> [((Int, Int), [String])]
+entries = concatMap entry . lines
+  where
+    entry l = case splitFields (takeWhile (/= '#') l) of
+      r : fields | not (null r) -> [(range r, fields)]
+      _ -> []
+
+-- | Default values from "# @missing: 3400..4DBF; W" lines.
+missing :: String -> [((Int, Int), [String])]
+missing = concatMap entry . lines
+  where
+    prefix = "# @missing: "
+    entry l
+      | prefix `isPrefixOf` l = case splitFields (drop (length prefix) l) of
+          r : fields -> [(range r, fields)]
+          [] -> []
+      | otherwise = []
+
+splitFields :: String -> [String]
+splitFields s = case map trim (splitOn ';' s) of
+  [""] -> []
+  fs -> fs
+  where
+    splitOn c xs = case break (== c) xs of
+      (a, []) -> [a]
+      (a, _ : rest) -> a : splitOn c rest
+    trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+
+range :: String -> (Int, Int)
+range r = case break (== '.') r of
+  (lo, []) -> (hexInt lo, hexInt lo)
+  (lo, _ : _ : hi) -> (hexInt lo, hexInt hi)
+  _ -> error ("bad range " ++ r)
+  where
+    hexInt h = case readHex h of
+      [(n, "")] -> n
+      _ -> error ("bad code point " ++ h)
+
+compress :: [(Int, Word16)] -> [(Int, Word16)]
+compress = go Nothing
+  where
+    go _ [] = []
+    go prev ((i, v) : rest)
+      | Just v == prev = go prev rest
+      | otherwise = (i, v) : go (Just v) rest
+
+render :: String -> [(Int, Word16)] -> String
+render version runs =
+  unlines $
+    [ "-- | Generated by scripts/GenUnicodeTable.hs from the Unicode " ++ version
+    , "-- Character Database. Do not edit."
+    , "module Lipstick.Internal.UnicodeTable (unicodeTableVersion, runStarts, runValues) where"
+    , ""
+    , "import Data.Array.Unboxed (UArray, listArray)"
+    , "import Data.Word (Word16)"
+    , ""
+    , "unicodeTableVersion :: String"
+    , "unicodeTableVersion = " ++ show version
+    , ""
+    , "-- | First code point of each run, ascending."
+    , "runStarts :: UArray Int Int"
+    , "runStarts = listArray (0, " ++ show (n - 1) ++ ")"
+    ]
+      ++ listLines (map (show . fst) runs)
+      ++ [ ""
+         , "-- | Packed properties of each run."
+         , "runValues :: UArray Int Word16"
+         , "runValues = listArray (0, " ++ show (n - 1) ++ ")"
+         ]
+      ++ listLines (map (show . snd) runs)
+  where
+    n = length runs
+    listLines xs = case chunk 16 xs of
+      [] -> ["  []"]
+      c : cs -> ("  [ " ++ intercalate ", " c) : map (("  , " ++) . intercalate ", ") cs ++ ["  ]"]
+    chunk k xs = case splitAt k xs of
+      ([], _) -> []
+      (a, b) -> a : chunk k b
