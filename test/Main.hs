@@ -34,6 +34,7 @@ main = do
       , styleParityTests
       , textParityTests
       , tableParityTests
+      , outlineParityTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -560,6 +561,33 @@ tableParityTests =
     ]
   where
     numbered = [[plain (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
+
+outlineParityTests :: TestTree
+outlineParityTests =
+  testGroup
+    "outline parity"
+    [ testCase "custom indenter" $
+        plainLines (forest (indenter (\_ _ -> ":   ")) [Node "a\nb" [Node "c" []]])
+          @?= ["└── a    ", ":   b    ", ":   └── c"]
+    , testCase "indentation uses the enumerator style by default" $
+        toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red)) [Node "a\nb" []])
+          @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;31m    \ESC[0mb"
+    , testCase "indenter style replaces it" $
+        toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red) <> indenterStyle (fg blue)) [Node "a\nb" []])
+          @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;34m    \ESC[0mb"
+    , testCase "width pads with the item's background" $
+        toAnsi defaultRenderEnv (list (width 5 <> itemStyle (bg red)) ["a"]) @?= "• \ESC[0;41ma  \ESC[0m"
+    , testCase "height pads with blank lines" $
+        plainLines (list (height 3) ["a"]) @?= ["• a", "   ", "   "]
+    , testCase "itemOffset skips items at both ends" $
+        plainLines (list (enumerator arabic <> itemOffset 1 1) ["a", "b", "c", "d"]) @?= ["1. b", "2. c"]
+    , testCase "itemOffset only affects the top level" $
+        plainLines (nestedList (itemOffset 1 0) [Node "a" [], Node "b" [Node "c" [], Node "d" []]])
+          @?= ["• b  ", "  • c", "  • d"]
+    , testCase "marker alignment keeps the enumerator's background" $
+        take 1 (T.lines (toAnsi defaultRenderEnv (list (enumerator arabic <> enumeratorStyle (bg red)) (replicate 10 "x"))))
+          @?= ["\ESC[0;41m 1. \ESC[0mx"]
+    ]
 
 renderTests :: TestTree
 renderTests =

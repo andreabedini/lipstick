@@ -26,11 +26,15 @@ module Lipstick.Outline
   , itemStyleWith
   , enumeratorStyle
   , enumeratorStyleWith
+  , indenterStyle
+  , indenterStyleWith
+  , itemOffset
 
     -- * Enumerators
   , Enumerator (..)
   , enumerator
   , enumeratorBy
+  , indenter
   , treeEnumerator
   , roundedTreeEnumerator
   , bullet
@@ -41,12 +45,13 @@ module Lipstick.Outline
   , roman
   ) where
 
+import Control.Applicative ((<|>))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Tree (Forest, Tree (..))
 import Lipstick.Internal.Block
-import Lipstick.Internal.Types (left, right)
+import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
 import Lipstick.Mod
 import Lipstick.Style (Style, frame, render)
 
@@ -70,24 +75,44 @@ data ItemPos = ItemPos
 
 data Outline = Outline
   { outEnumerator :: Int -> Enumerator
+  , outIndenter :: Maybe (Int -> Int -> Text)
   , outItemStyle :: ItemPos -> Mod Style
   , outEnumStyle :: ItemPos -> Mod Style
+  , outIndentStyle :: Maybe (ItemPos -> Mod Style)
   , outRootStyle :: Mod Style
+  , outSize :: Size
+  , outOffset :: (Int, Int)
   }
 
+-- | 'width' pads every line to at least that many columns, with the
+-- background of its item's style; 'height' pads with blank lines.
+instance HasSize Outline where
+  overSize f o = o {outSize = f (outSize o)}
+
 treeDefaults, listDefaults :: Outline
-treeDefaults = Outline (const treeEnumerator) (const mempty) (const mempty) mempty
+treeDefaults =
+  Outline
+    { outEnumerator = const treeEnumerator
+    , outIndenter = Nothing
+    , outItemStyle = const mempty
+    , outEnumStyle = const mempty
+    , outIndentStyle = Nothing
+    , outRootStyle = mempty
+    , outSize = defSize
+    , outOffset = (0, 0)
+    }
 listDefaults = treeDefaults {outEnumerator = const bullet}
 
 -- | A tree: the root, then its children.
 tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
   let (o, props) = runMod m treeDefaults
-   in withProps props (blockCells (frame (outRootStyle o) root) ++ items o 0 kids)
+      rootLines = [(fillOf (outRootStyle o), l) | l <- blockCells (frame (outRootStyle o) root)]
+   in finish o props (rootLines ++ items o 0 kids)
 
 -- | Trees without a common root, with tree branches.
 forest :: Mod Outline -> Forest Block -> Block
-forest m kids = let (o, props) = runMod m treeDefaults in withProps props (items o 0 kids)
+forest m kids = let (o, props) = runMod m treeDefaults in finish o props (items o 0 kids)
 
 -- | A list of items, with bullets.
 list :: Mod Outline -> [Block] -> Block
@@ -95,27 +120,52 @@ list m = nestedList m . map (`Node` [])
 
 -- | A list whose items can have nested items, with bullets.
 nestedList :: Mod Outline -> Forest Block -> Block
-nestedList m kids = let (o, props) = runMod m listDefaults in withProps props (items o 0 kids)
+nestedList m kids = let (o, props) = runMod m listDefaults in finish o props (items o 0 kids)
 
-items :: Outline -> Int -> Forest Block -> [[Cell]]
-items o depth kids = concat (zipWith item [0 ..] kids)
+-- | Pad lines to the width (each with its own fill attributes) and the
+-- height, then apply the common properties.
+finish :: Outline -> Props -> [(Attrs, [Cell])] -> Block
+finish o props ls =
+  let Size w h = outSize o
+      wide = maximum (fromMaybe 0 w : map (cellsWidth . snd) ls)
+      padded = [alignCells a left wide l | (a, l) <- ls]
+      tall = padded ++ replicate (fromMaybe 0 h - length padded) (blankCells mempty wide)
+   in withProps props tall
+
+-- | The background (and reverse video) of a style, for padding.
+fillOf :: Mod Style -> Attrs
+fillOf = fillAttrs . propAttrs . propsOf
+
+-- | The lines of a level of items, each with the fill attributes for
+-- padding it.
+items :: Outline -> Int -> Forest Block -> [(Attrs, [Cell])]
+items o depth kids0 = concat (zipWith item [0 ..] kids)
   where
+    kids =
+      if depth == 0
+        then let (start, end) = outOffset o in take (length kids0 - start - end) (drop start kids0)
+        else kids0
     n = length kids
     e = outEnumerator o depth
     pos i = ItemPos depth i n
-    styledLine i t = concat (take 1 (blockCells (render (outEnumStyle o (pos i)) (plain t))))
-    markers = [styledLine i (enumMarker e n i) | i <- [0 .. n - 1]]
+    styledLine m t = concat (take 1 (blockCells (render m (plain t))))
+    enumStyle i = outEnumStyle o (pos i)
+    indentStyle i = maybe (enumStyle i) ($ pos i) (outIndentStyle o)
+    markers = [styledLine (enumStyle i) (enumMarker e n i) | i <- [0 .. n - 1]]
     markerW = maximum (0 : map cellsWidth markers)
 
     item i (Node b children) =
-      let marker = alignCells mempty right markerW (markers !! i)
-          indentText = fromMaybe (T.replicate markerW " ") (enumIndent e n i)
-          indent = alignCells mempty left markerW (styledLine i indentText)
+      let -- Alignment space keeps the enumerator's background, as lipgloss.
+          marker = alignCells (fillOf (enumStyle i)) right markerW (markers !! i)
+          indentText =
+            fromMaybe (T.replicate markerW " ") (fmap (\f -> f n i) (outIndenter o) <|> enumIndent e n i)
+          indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
+          itemFill = fillOf (outItemStyle o (pos i))
           body = case blockCells (frame (outItemStyle o (pos i)) b) of
             [] -> [[]]
             ls -> ls
-       in zipWith (++) (marker : repeat indent) body
-            ++ map (indent ++) (items o (depth + 1) children)
+       in [(itemFill, l) | l <- zipWith (++) (marker : repeat indent) body]
+            ++ [(a, indent ++ l) | (a, l) <- items o (depth + 1) children]
 
 -- Styling ---------------------------------------------------------------------
 
@@ -135,6 +185,20 @@ itemStyleWith f = fieldMod (\o -> o {outItemStyle = \p -> outItemStyle o p <> f 
 enumeratorStyle :: Mod Style -> Mod Outline
 enumeratorStyle m = enumeratorStyleWith (const m)
 
+-- | Style the indentation before an item's further lines and its
+-- children. Until an indenter style is set, the enumerator style is used.
+indenterStyle :: Mod Style -> Mod Outline
+indenterStyle m = indenterStyleWith (const m)
+
+-- | Style the indentation by position. Successive indenter styles add up.
+indenterStyleWith :: (ItemPos -> Mod Style) -> Mod Outline
+indenterStyleWith f = fieldMod (\o -> o {outIndentStyle = Just (\p -> maybe mempty ($ p) (outIndentStyle o) <> f p)})
+
+-- | Show only part of the top-level items: skip @start@ items at the
+-- beginning and @end@ at the end. Enumerators count from the first shown.
+itemOffset :: Int -> Int -> Mod Outline
+itemOffset start end = fieldMod (\o -> o {outOffset = (max 0 start, max 0 end)})
+
 -- | Style enumerators by position. Successive enumerator styles add up.
 enumeratorStyleWith :: (ItemPos -> Mod Style) -> Mod Outline
 enumeratorStyleWith f = fieldMod (\o -> o {outEnumStyle = \p -> outEnumStyle o p <> f p})
@@ -144,6 +208,12 @@ enumeratorStyleWith f = fieldMod (\o -> o {outEnumStyle = \p -> outEnumStyle o p
 -- | Use this enumerator at every depth.
 enumerator :: Enumerator -> Mod Outline
 enumerator e = enumeratorBy (const e)
+
+-- | What goes before an item's further lines and its children, given the
+-- number of siblings and the item's index, instead of the enumerator's
+-- own indentation.
+indenter :: (Int -> Int -> Text) -> Mod Outline
+indenter f = fieldMod (\o -> o {outIndenter = Just f})
 
 -- | Choose the enumerator by depth (0 for the top level).
 enumeratorBy :: (Int -> Enumerator) -> Mod Outline

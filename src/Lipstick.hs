@@ -207,9 +207,13 @@ module Lipstick
   , itemStyleWith
   , enumeratorStyle
   , enumeratorStyleWith
+  , indenterStyle
+  , indenterStyleWith
+  , itemOffset
   , Enumerator (..)
   , enumerator
   , enumeratorBy
+  , indenter
   , treeEnumerator
   , roundedTreeEnumerator
   , bullet
