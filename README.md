@@ -34,8 +34,18 @@ main = putBlock (render card "Hello, kitty")
 The outputs in this README are shown without colours. `cabal run
 lipstick-demo` shows them all in a terminal.
 
-lipstick builds with GHC 9.12 and is not on Hackage yet; add this
-repository to your `cabal.project` to use it.
+lipstick builds with GHC 9.12 and is not on Hackage yet. To use it, add
+the repository to your `cabal.project`:
+
+```
+source-repository-package
+  type: git
+  location: https://github.com/andreabedini/lipstick.git
+  tag: <commit>
+  subdir: . lipstick-brick
+```
+
+(`lipstick-brick` is only needed for brick and vty applications.)
 
 ## Styles are modifiers
 

@@ -10,8 +10,15 @@ license:         MIT
 license-file:    LICENSE
 author:          Andrea Bedini
 maintainer:      andrea@bedini.au
+homepage:        https://github.com/andreabedini/lipstick
+bug-reports:     https://github.com/andreabedini/lipstick/issues
 build-type:      Simple
 extra-doc-files: CHANGELOG.md
+
+source-repository head
+    type:     git
+    location: https://github.com/andreabedini/lipstick.git
+    subdir:   lipstick-brick
 
 common warnings
     ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
