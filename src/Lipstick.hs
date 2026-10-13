@@ -23,7 +23,14 @@ module Lipstick
   , frame
   , inherit
   , tabWidth
+  , unsetTabWidth
   , inline
+  , unsetInline
+  , transform
+  , unsetTransform
+  , colorWhitespace
+  , underlineSpaces
+  , strikethroughSpaces
 
     -- * Blocks
   , Block
@@ -36,7 +43,7 @@ module Lipstick
   , plain
   , styled
   , fromAnsi
-  , Attrs
+  , Attrs (..)
 
     -- * Layout
   , joinHorizontal
@@ -72,7 +79,10 @@ module Lipstick
   , bg
   , unsetFg
   , unsetBg
+  , unsetUnderline
+  , unsetUnderlineColor
   , link
+  , unsetLink
 
     -- * Padding and margins
   , padding
@@ -90,6 +100,10 @@ module Lipstick
   , marginBg
   , paddingChar
   , marginChar
+  , unsetPadding
+  , unsetMargins
+  , unsetMarginBg
+  , Sides (..)
 
     -- * Borders
   , Border (..)
@@ -97,6 +111,16 @@ module Lipstick
   , borderFg
   , borderBg
   , borderFgBlend
+  , borderFgBlendOffset
+  , borderTopFg
+  , borderRightFg
+  , borderBottomFg
+  , borderLeftFg
+  , borderTopBg
+  , borderRightBg
+  , borderBottomBg
+  , borderLeftBg
+  , unsetBorder
   , borderTop
   , borderRight
   , borderBottom
@@ -117,9 +141,39 @@ module Lipstick
   , height
   , maxWidth
   , maxHeight
+  , unsetWidth
+  , unsetHeight
+  , unsetMaxWidth
+  , unsetMaxHeight
   , align
   , valign
+  , unsetAlign
   , noWrap
+
+    -- * Getters
+  , getAttrs
+  , getMaxWidth
+  , getMaxHeight
+  , getPadding
+  , getMargins
+  , getMarginBg
+  , getBorder
+  , getBorderSides
+  , getWidth
+  , getHeight
+  , getAlign
+  , getVAlign
+  , getTabWidth
+  , getInline
+  , horizontalPadding
+  , verticalPadding
+  , horizontalMargins
+  , verticalMargins
+  , horizontalBorderSize
+  , verticalBorderSize
+  , horizontalFrameSize
+  , verticalFrameSize
+  , frameSize
 
     -- * Tables
   , Table

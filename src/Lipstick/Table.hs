@@ -109,7 +109,10 @@ table m headers rows
   where
     (t, props) = runMod m defTable
     (chars, edges) = borderEdges (tableBorder t)
-    ba = mempty {attrFg = borderFgColor (tableBorder t), attrBg = borderBgColor (tableBorder t)}
+    bp = tableBorder t
+    sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
+    -- Outer edges take their side's colours; inner rules take the top's.
+    ba = sideAttrs sideTop
     Size w _ = tableSize t
 
     ncols = maximum (0 : length headers : map length rows)
@@ -142,16 +145,16 @@ table m headers rows
           ]
     padTo h ls = take h (ls ++ repeat [])
 
-    piece txt n = fillCells ba txt n
-    leftV = [piece (leftEdge chars) (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
-    rightV = [piece (rightEdge chars) (sideW edgeRight (rightEdge chars)) | edgeRight edges]
-    colRule = [piece (leftEdge chars) ruleW | tableColumnRules t]
+    piece a txt n = fillCells a txt n
+    leftV = [piece (sideAttrs sideLeft) (leftEdge chars) (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
+    rightV = [piece (sideAttrs sideRight) (rightEdge chars) (sideW edgeRight (rightEdge chars)) | edgeRight edges]
+    colRule = [piece ba (leftEdge chars) ruleW | tableColumnRules t]
     line cellsOf = concat (leftV ++ [intercalate (concat colRule) cellsOf] ++ rightV)
-    rule l mid r edge =
+    rule a l mid r edge =
       concat
-        ( [piece l (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
-            ++ [intercalate (concat [piece mid ruleW | tableColumnRules t]) [piece edge cw | cw <- widths]]
-            ++ [piece r (sideW edgeRight (rightEdge chars)) | edgeRight edges]
+        ( [piece a l (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
+            ++ [intercalate (concat [piece a mid ruleW | tableColumnRules t]) [piece a edge cw | cw <- widths]]
+            ++ [piece a r (sideW edgeRight (rightEdge chars)) | edgeRight edges]
         )
 
     rendered = map (\row -> (fst row, map line (renderRow row))) allRows
@@ -161,14 +164,14 @@ table m headers rows
     headerLines = concat [ls | (row, ls) <- zip allRows (map snd rendered), isHeader row]
     bodyLines = [ls | (row, ls) <- zip allRows (map snd rendered), not (isHeader row)]
 
-    middleRule = rule (middleLeft chars) (middle chars) (middleRight chars) (topEdge chars)
+    middleRule = rule ba (middleLeft chars) (middle chars) (middleRight chars) (topEdge chars)
     body = intercalate [middleRule | tableRowRules t] bodyLines
     allLines =
-      [rule (topLeftCorner chars) (middleTop chars) (topRightCorner chars) (topEdge chars) | edgeTop edges]
+      [rule ba (topLeftCorner chars) (middleTop chars) (topRightCorner chars) (topEdge chars) | edgeTop edges]
         ++ headerLines
         ++ [middleRule | tableHeaderRule t, not (null headerLines), not (null bodyLines)]
         ++ body
-        ++ [rule (bottomLeftCorner chars) (middleBottom chars) (bottomRightCorner chars) (bottomEdge chars) | edgeBottom edges]
+        ++ [rule (sideAttrs sideBottom) (bottomLeftCorner chars) (middleBottom chars) (bottomRightCorner chars) (bottomEdge chars) | edgeBottom edges]
 
 
 -- | Make column widths add up to a target: shrink the widest column one

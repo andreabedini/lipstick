@@ -92,9 +92,9 @@ getFlag f = case f of
   Strikethrough -> attrStrikethrough
 
 -- | The attributes used for whitespace a style adds around content
--- (alignment, padding): only the background carries over.
+-- (alignment, padding): only the background and reverse video carry over.
 fillAttrs :: Attrs -> Attrs
-fillAttrs a = mempty {attrBg = attrBg a}
+fillAttrs a = mempty {attrBg = attrBg a, attrReverse = attrReverse a}
 
 -- | A position along an axis: 0 is left/top, 1 is right/bottom.
 newtype Position = Position Double

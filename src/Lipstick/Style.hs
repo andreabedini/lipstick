@@ -5,12 +5,45 @@ module Lipstick.Style
   , render
   , frame
   , tabWidth
+  , unsetTabWidth
   , inline
+  , unsetInline
+  , transform
+  , unsetTransform
+  , colorWhitespace
+  , underlineSpaces
+  , strikethroughSpaces
   , resolveStyle
   , inherit
+
+    -- * Getters
+  , getAttrs
+  , getMaxWidth
+  , getMaxHeight
+  , getPadding
+  , getMargins
+  , getMarginBg
+  , getBorder
+  , getBorderSides
+  , getWidth
+  , getHeight
+  , getAlign
+  , getVAlign
+  , getTabWidth
+  , getInline
+  , horizontalPadding
+  , verticalPadding
+  , horizontalMargins
+  , verticalMargins
+  , horizontalBorderSize
+  , verticalBorderSize
+  , horizontalFrameSize
+  , verticalFrameSize
+  , frameSize
   ) where
 
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Color (Color, blend)
@@ -30,8 +63,11 @@ data Style = Style
   , styleTabWidth :: !Int
   , styleInline :: !Bool
   , styleWrap :: !Bool
+  , styleColorWhitespace :: !Bool
+  , styleUnderlineSpaces :: !(Maybe Bool)
+  , styleStrikeSpaces :: !(Maybe Bool)
+  , styleTransform :: !(Maybe (Text -> Text))
   }
-  deriving (Eq, Show)
 
 instance HasBox Style where
   overBox f s = s {styleBox = f (styleBox s)}
@@ -49,7 +85,7 @@ instance HasWrap Style where
   overWrap f s = s {styleWrap = f (styleWrap s)}
 
 defStyle :: Style
-defStyle = Style defBox defBorderProps defSize defAlign 4 False True
+defStyle = Style defBox defBorderProps defSize defAlign 4 False True True Nothing Nothing Nothing
 
 -- | The style and properties a modifier produces from the defaults.
 resolveStyle :: Mod Style -> (Style, Props)
@@ -59,10 +95,41 @@ resolveStyle m = runMod m defStyle
 tabWidth :: Int -> Mod Style
 tabWidth n = fieldMod (\s -> s {styleTabWidth = max 0 n})
 
+unsetTabWidth :: Mod Style
+unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
+
 -- | Render on a single line: newlines are removed, and padding, margins,
 -- border, size and alignment are ignored, except 'maxWidth'.
 inline :: Mod Style
 inline = fieldMod (\s -> s {styleInline = True})
+
+unsetInline :: Mod Style
+unsetInline = fieldMod (\s -> s {styleInline = False})
+
+-- | Change the text before rendering it (each styled piece separately).
+-- Does not apply to 'frame'.
+--
+-- > render (transform T.toUpper) "raow!"
+transform :: (Text -> Text) -> Mod Style
+transform f = fieldMod (\s -> s {styleTransform = Just f})
+
+unsetTransform :: Mod Style
+unsetTransform = fieldMod (\s -> s {styleTransform = Nothing})
+
+-- | Whether the background colours the padding and alignment space
+-- (default 'True').
+colorWhitespace :: Bool -> Mod Style
+colorWhitespace v = fieldMod (\s -> s {styleColorWhitespace = v})
+
+-- | Whether spaces in the text are underlined. By default they are when
+-- the text is; @underlineSpaces True@ underlines them even when the text
+-- is not.
+underlineSpaces :: Bool -> Mod Style
+underlineSpaces v = fieldMod (\s -> s {styleUnderlineSpaces = Just v})
+
+-- | Like 'underlineSpaces', for strikethrough.
+strikethroughSpaces :: Bool -> Mod Style
+strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 
 -- | Apply a parent style, keeping the padding and margins already set:
 -- lipgloss's @Inherit@.
@@ -75,7 +142,7 @@ inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
 render :: Mod Style -> Inline -> Block
 render m inl =
   let (s, p) = resolveStyle m
-      ls = inlineLines (styleTabWidth s) inl
+      ls = inlineLines (styleTabWidth s) (maybe inl (`transformInline` inl) (styleTransform s))
       wrapped = case contentWidth s of
         Just w
           | styleWrap s -> concatMap (wrapCells w) ls
@@ -90,6 +157,9 @@ render m inl =
 -- wider than the 'width' allows, the box grows.
 frame :: Mod Style -> Block -> Block
 frame m b = let (s, p) = resolveStyle m in layout s p (blockCells b)
+
+transformInline :: (Text -> Text) -> Inline -> Inline
+transformInline f (Inline segs) = Inline [(a, f t) | (a, t) <- segs]
 
 -- | Widths of the left and right border columns.
 borderColumns :: BorderProps -> (Int, Int)
@@ -108,7 +178,9 @@ contentWidth s = do
 layout :: Style -> Props -> [[Cell]] -> Block
 layout s props content0 =
   let attrs = propAttrs props
-      fill = fillAttrs attrs
+      fill
+        | styleColorWhitespace s = fillAttrs attrs
+        | otherwise = (fillAttrs attrs) {attrBg = Nothing}
       Box (Sides pt pr pb pl) (Sides mt mr mb ml) mbg pch mch = styleBox s
       Size _ hgt = styleSize s
       Align ah av = styleAlign s
@@ -118,7 +190,19 @@ layout s props content0 =
       bt = if edgeTop edges then 1 else 0
       bb = if edgeBottom edges then 1 else 0
 
-      content = overCellAttrs (attrs <>) content0
+      content = map (map spaceRule) (overCellAttrs (attrs <>) content0)
+      spaceRule c
+        | cellText c == T.singleton ' ' = c {cellAttrs = spaceAttrs (cellAttrs c)}
+        | otherwise = c
+      spaceAttrs a =
+        a
+          { attrUnderline = case styleUnderlineSpaces s of
+              Just True -> Just (fromMaybe SingleUnderline (attrUnderline a >>= visible))
+              Just False -> Just NoUnderline
+              Nothing -> attrUnderline a
+          , attrStrikethrough = maybe (attrStrikethrough a) Just (styleStrikeSpaces s)
+          }
+      visible u = if u == NoUnderline then Nothing else Just u
 
       -- Horizontal alignment within the content width.
       innerW = maximum (fromMaybe 0 (contentWidth s) : map cellsWidth content)
@@ -139,16 +223,16 @@ layout s props content0 =
           ++ replicate pb (padCells padW)
 
       -- Border.
-      ba = mempty {attrFg = borderFgColor bp, attrBg = borderBgColor bp}
-      piece t n = fillCells ba t n
-      corner on t n = if on then piece t n else []
-      hRule l edge r = corner (edgeLeft edges) l bl ++ piece edge padW ++ corner (edgeRight edges) r br
-      topRow = hRule (topLeftCorner chars) (topEdge chars) (topRightCorner chars)
-      bottomRow = hRule (bottomLeftCorner chars) (bottomEdge chars) (bottomRightCorner chars)
-      sideL = if edgeLeft edges then piece (leftEdge chars) bl else []
-      sideR = if edgeRight edges then piece (rightEdge chars) br else []
+      sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
+      piece a t n = fillCells a t n
+      corner a on t n = if on then piece a t n else []
+      hRule a l edge r = corner a (edgeLeft edges) l bl ++ piece a edge padW ++ corner a (edgeRight edges) r br
+      topRow = hRule (sideAttrs sideTop) (topLeftCorner chars) (topEdge chars) (topRightCorner chars)
+      bottomRow = hRule (sideAttrs sideBottom) (bottomLeftCorner chars) (bottomEdge chars) (bottomRightCorner chars)
+      sideL = if edgeLeft edges then piece (sideAttrs sideLeft) (leftEdge chars) bl else []
+      sideR = if edgeRight edges then piece (sideAttrs sideRight) (rightEdge chars) br else []
       bordered =
-        blendBorder (borderFgStops bp) edges (length sideL) (length sideR) $
+        blendBorder (borderFgStops bp) (borderFgOffset bp) edges (length sideL) (length sideR) $
           [topRow | edgeTop edges]
             ++ [sideL ++ l ++ sideR | l <- padded]
             ++ [bottomRow | edgeBottom edges]
@@ -165,16 +249,16 @@ layout s props content0 =
 
    in cropToProps props margined
 
--- | Recolour the border cells with a gradient, clockwise from the top-left.
--- The rows are the bordered box; @nl@ and @nr@ are the number of cells in
--- the left and right border columns.
-blendBorder :: [Color] -> Edges -> Int -> Int -> [[Cell]] -> [[Cell]]
-blendBorder [] _ _ _ rows = rows
-blendBorder stops edges nl nr rows =
+-- | Recolour the border cells with a gradient, clockwise from the top-left
+-- and rotated clockwise by an offset. The rows are the bordered box; @nl@
+-- and @nr@ are the number of cells in the left and right border columns.
+blendBorder :: [Color] -> Int -> Edges -> Int -> Int -> [[Cell]] -> [[Cell]]
+blendBorder [] _ _ _ _ rows = rows
+blendBorder stops offset edges nl nr rows =
   let (topRows, rest) = splitAt (if edgeTop edges then 1 else 0) rows
       (middleRows, bottomRows) = splitAt (length rest - (if edgeBottom edges then 1 else 0)) rest
       n = sum (map length topRows) + length middleRows * (nr + nl) + sum (map length bottomRows)
-      colors = blend n stops
+      colors = rotate offset (blend n stops)
       (cTop, c1) = splitAt (sum (map length topRows)) colors
       (cRight, c2) = splitAt (length middleRows * nr) c1
       (cBottom, cLeft) = splitAt (sum (map length bottomRows)) c2
@@ -191,7 +275,80 @@ blendBorder stops edges nl nr rows =
         ++ middle'
         ++ [reverse (paint cBottom (reverse row)) | row <- bottomRows]
   where
+    rotate k xs
+      | null xs = xs
+      | otherwise = let r = length xs - k `mod` length xs in drop r xs ++ take r xs
     chunks k xs
       | k <= 0 = []
       | null xs = []
       | otherwise = let (a, b) = splitAt k xs in a : chunks k b
+
+-- Getters ---------------------------------------------------------------------
+
+-- | The text attributes a modifier sets (on any thing).
+getAttrs :: Mod f -> Attrs
+getAttrs = propAttrs . propsOf
+
+getMaxWidth, getMaxHeight :: Mod f -> Maybe Int
+getMaxWidth = propMaxWidth . propsOf
+getMaxHeight = propMaxHeight . propsOf
+
+field :: (Style -> a) -> Mod Style -> a
+field f = f . fst . resolveStyle
+
+getPadding, getMargins :: Mod Style -> Sides Int
+getPadding = field (boxPadding . styleBox)
+getMargins = field (boxMargin . styleBox)
+
+getMarginBg :: Mod Style -> Maybe Color
+getMarginBg = field (boxMarginBg . styleBox)
+
+-- | The border characters, if a border is drawn.
+getBorder :: Mod Style -> Maybe Border
+getBorder m =
+  let bp = field styleBorder m
+      (chars, Edges t r b l) = borderEdges bp
+   in if or [t, r, b, l] then Just chars else Nothing
+
+-- | Which sides of the border are drawn.
+getBorderSides :: Mod Style -> Sides Bool
+getBorderSides m = let Edges t r b l = snd (borderEdges (field styleBorder m)) in Sides t r b l
+
+getWidth, getHeight :: Mod Style -> Maybe Int
+getWidth = field (sizeWidth . styleSize)
+getHeight = field (sizeHeight . styleSize)
+
+getAlign, getVAlign :: Mod Style -> Position
+getAlign = field (alignH . styleAlign)
+getVAlign = field (alignV . styleAlign)
+
+getTabWidth :: Mod Style -> Int
+getTabWidth = field styleTabWidth
+
+getInline :: Mod Style -> Bool
+getInline = field styleInline
+
+horizontalPadding, verticalPadding :: Mod Style -> Int
+horizontalPadding m = let Sides _ r _ l = getPadding m in l + r
+verticalPadding m = let Sides t _ b _ = getPadding m in t + b
+
+horizontalMargins, verticalMargins :: Mod Style -> Int
+horizontalMargins m = let Sides _ r _ l = getMargins m in l + r
+verticalMargins m = let Sides t _ b _ = getMargins m in t + b
+
+horizontalBorderSize, verticalBorderSize :: Mod Style -> Int
+horizontalBorderSize m = let (l, r) = borderColumns (field styleBorder m) in l + r
+verticalBorderSize m = let Sides t _ b _ = getBorderSides m in fromEnum t + fromEnum b
+
+-- | Columns taken by padding, border and margins: what is left for content
+-- is the available width minus this.
+horizontalFrameSize :: Mod Style -> Int
+horizontalFrameSize m = horizontalPadding m + horizontalBorderSize m + horizontalMargins m
+
+-- | Rows taken by padding, border and margins.
+verticalFrameSize :: Mod Style -> Int
+verticalFrameSize m = verticalPadding m + verticalBorderSize m + verticalMargins m
+
+-- | @(horizontalFrameSize, verticalFrameSize)@
+frameSize :: Mod Style -> (Int, Int)
+frameSize m = (horizontalFrameSize m, verticalFrameSize m)

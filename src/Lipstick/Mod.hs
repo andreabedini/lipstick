@@ -32,6 +32,7 @@ module Lipstick.Mod
     -- * Properties of every thing
   , Props (..)
   , defProps
+  , propsOf
   , withProps
   , cropToProps
 
@@ -70,7 +71,10 @@ module Lipstick.Mod
   , bg
   , unsetFg
   , unsetBg
+  , unsetUnderline
+  , unsetUnderlineColor
   , link
+  , unsetLink
 
     -- * Padding and margins
   , padding
@@ -88,12 +92,25 @@ module Lipstick.Mod
   , marginBg
   , paddingChar
   , marginChar
+  , unsetPadding
+  , unsetMargins
+  , unsetMarginBg
 
     -- * Borders
   , border
   , borderFg
   , borderBg
   , borderFgBlend
+  , borderFgBlendOffset
+  , borderTopFg
+  , borderRightFg
+  , borderBottomFg
+  , borderLeftFg
+  , borderTopBg
+  , borderRightBg
+  , borderBottomBg
+  , borderLeftBg
+  , unsetBorder
   , borderTop
   , borderRight
   , borderBottom
@@ -104,10 +121,15 @@ module Lipstick.Mod
   , height
   , maxWidth
   , maxHeight
+  , unsetWidth
+  , unsetHeight
+  , unsetMaxWidth
+  , unsetMaxHeight
 
     -- * Alignment
   , align
   , valign
+  , unsetAlign
 
     -- * Wrapping
   , noWrap
@@ -158,6 +180,10 @@ data Props = Props
 
 defProps :: Props
 defProps = Props mempty Nothing Nothing
+
+-- | The common properties a modifier sets, starting from the defaults.
+propsOf :: Mod f -> Props
+propsOf (Mod _ g) = g defProps
 
 -- | What most builders do with the properties: lay the attributes under
 -- everything, then crop.
@@ -214,15 +240,17 @@ defBox = Box (uniformSides 0) (uniformSides 0) Nothing ' ' ' '
 data BorderProps = BorderProps
   { borderChars :: !(Maybe Border)
   , borderSides :: !(Sides (Maybe Bool))
-  , borderFgColor :: !(Maybe Color)
-  , borderBgColor :: !(Maybe Color)
+  , borderFgColors :: !(Sides (Maybe Color))
+  , borderBgColors :: !(Sides (Maybe Color))
   , borderFgStops :: ![Color]
-  -- ^ when not empty, a gradient that replaces 'borderFgColor'
+  -- ^ when not empty, a gradient that replaces 'borderFgColors'
+  , borderFgOffset :: !Int
+  -- ^ how far the gradient is rotated clockwise
   }
   deriving (Eq, Show)
 
 defBorderProps :: BorderProps
-defBorderProps = BorderProps Nothing (uniformSides Nothing) Nothing Nothing []
+defBorderProps = BorderProps Nothing (uniformSides Nothing) (uniformSides Nothing) (uniformSides Nothing) [] 0
 
 -- | Which sides of a border are drawn.
 data Edges = Edges {edgeTop, edgeRight, edgeBottom, edgeLeft :: !Bool}
@@ -297,9 +325,16 @@ unsetFg, unsetBg :: Mod f
 unsetFg = attrsMod (\a -> a {attrFg = Nothing})
 unsetBg = attrsMod (\a -> a {attrBg = Nothing})
 
+unsetUnderline, unsetUnderlineColor :: Mod f
+unsetUnderline = attrsMod (\a -> a {attrUnderline = Nothing})
+unsetUnderlineColor = attrsMod (\a -> a {attrUnderlineColor = Nothing})
+
 -- | Make the text a hyperlink (OSC 8).
 link :: Text -> Mod f
 link url = attrsMod (\a -> a {attrLink = Just url})
+
+unsetLink :: Mod f
+unsetLink = attrsMod (\a -> a {attrLink = Nothing})
 
 -- Padding and margins ---------------------------------------------------------
 
@@ -339,6 +374,11 @@ marginLeft n = marginMod (\s -> s {sideLeft = n})
 marginBg :: HasBox f => Color -> Mod f
 marginBg c = fieldMod (overBox (\b -> b {boxMarginBg = Just c}))
 
+unsetPadding, unsetMargins, unsetMarginBg :: HasBox f => Mod f
+unsetPadding = paddingMod (const (uniformSides 0))
+unsetMargins = marginMod (const (uniformSides 0))
+unsetMarginBg = fieldMod (overBox (\b -> b {boxMarginBg = Nothing}))
+
 -- | The character padding is filled with (default a space).
 paddingChar :: HasBox f => Char -> Mod f
 paddingChar c = fieldMod (overBox (\b -> b {boxPaddingChar = c}))
@@ -357,8 +397,35 @@ border :: HasBorder f => Border -> Mod f
 border b = borderMod (\p -> p {borderChars = Just b})
 
 borderFg, borderBg :: HasBorder f => Color -> Mod f
-borderFg c = borderMod (\p -> p {borderFgColor = Just c, borderFgStops = []})
-borderBg c = borderMod (\p -> p {borderBgColor = Just c})
+borderFg c = borderMod (\p -> p {borderFgColors = uniformSides (Just c), borderFgStops = []})
+borderBg c = borderMod (\p -> p {borderBgColors = uniformSides (Just c)})
+
+-- | The colour of one side of the border. The top and bottom sides include
+-- the corners.
+borderTopFg, borderRightFg, borderBottomFg, borderLeftFg :: HasBorder f => Color -> Mod f
+borderTopFg c = borderFgSide (\s -> s {sideTop = Just c})
+borderRightFg c = borderFgSide (\s -> s {sideRight = Just c})
+borderBottomFg c = borderFgSide (\s -> s {sideBottom = Just c})
+borderLeftFg c = borderFgSide (\s -> s {sideLeft = Just c})
+
+borderTopBg, borderRightBg, borderBottomBg, borderLeftBg :: HasBorder f => Color -> Mod f
+borderTopBg c = borderBgSide (\s -> s {sideTop = Just c})
+borderRightBg c = borderBgSide (\s -> s {sideRight = Just c})
+borderBottomBg c = borderBgSide (\s -> s {sideBottom = Just c})
+borderLeftBg c = borderBgSide (\s -> s {sideLeft = Just c})
+
+borderFgSide, borderBgSide :: HasBorder f => (Sides (Maybe Color) -> Sides (Maybe Color)) -> Mod f
+borderFgSide g = borderMod (\p -> p {borderFgColors = g (borderFgColors p), borderFgStops = []})
+borderBgSide g = borderMod (\p -> p {borderBgColors = g (borderBgColors p)})
+
+-- | Rotate a 'borderFgBlend' gradient clockwise by this many cells
+-- (anticlockwise if negative).
+borderFgBlendOffset :: HasBorder f => Int -> Mod f
+borderFgBlendOffset n = borderMod (\p -> p {borderFgOffset = n})
+
+-- | No border, and no border colours.
+unsetBorder :: HasBorder f => Mod f
+unsetBorder = borderMod (const defBorderProps)
 
 -- | Colour the border with a gradient through these colours, going
 -- clockwise from the top-left corner.
@@ -397,6 +464,14 @@ maxWidth n = propMod (\p -> p {propMaxWidth = Just n})
 maxHeight :: Int -> Mod f
 maxHeight n = propMod (\p -> p {propMaxHeight = Just n})
 
+unsetWidth, unsetHeight :: HasSize f => Mod f
+unsetWidth = sizeMod (\s -> s {sizeWidth = Nothing})
+unsetHeight = sizeMod (\s -> s {sizeHeight = Nothing})
+
+unsetMaxWidth, unsetMaxHeight :: Mod f
+unsetMaxWidth = propMod (\p -> p {propMaxWidth = Nothing})
+unsetMaxHeight = propMod (\p -> p {propMaxHeight = Nothing})
+
 -- Alignment -------------------------------------------------------------------
 
 -- | Horizontal alignment.
@@ -406,6 +481,10 @@ align p = fieldMod (overAlign (\a -> a {alignH = p}))
 -- | Vertical alignment.
 valign :: HasAlign f => Position -> Mod f
 valign p = fieldMod (overAlign (\a -> a {alignV = p}))
+
+-- | Back to the default alignment, 'left' and 'top'.
+unsetAlign :: HasAlign f => Mod f
+unsetAlign = fieldMod (overAlign (const defAlign))
 
 -- Wrapping --------------------------------------------------------------------
 

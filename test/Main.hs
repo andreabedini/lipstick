@@ -31,6 +31,7 @@ main = do
       , outlineTests
       , layerTests
       , commonPropsTests
+      , styleParityTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -409,6 +410,76 @@ commonPropsTests =
     ]
   where
     besides a b = hcat [a, b]
+
+styleParityTests :: TestTree
+styleParityTests =
+  testGroup
+    "style parity"
+    [ testCase "per-side border colours" $ do
+        let ls = T.lines (toAnsi defaultRenderEnv (render (border asciiBorder <> borderTopFg red <> borderLeftFg blue <> borderRightBg green) "x"))
+        ls
+          @?= [ "\ESC[0;31m+-+\ESC[0m"
+              , "\ESC[0;34m|\ESC[0mx\ESC[0;42m|\ESC[0m"
+              , "+-+"
+              ]
+    , testCase "borderFg sets every side, a side after it overrides one" $
+        T.lines (toAnsi defaultRenderEnv (render (border asciiBorder <> borderFg red <> borderBottomFg blue) "x"))
+          @?= ["\ESC[0;31m+-+\ESC[0m", "\ESC[0;31m|\ESC[0mx\ESC[0;31m|\ESC[0m", "\ESC[0;34m+-+\ESC[0m"]
+    , testCase "gradient offset rotates clockwise" $ do
+        let colours m = [c | Just c <- map (attrFgOf . T.unpack) (take 1 (T.lines (toAnsi defaultRenderEnv (render (border asciiBorder <> m) "x"))))]
+            attrFgOf l = if take 2 l == "\ESC[" then Just (takeWhile (/= 'm') l) else Nothing
+        -- With offset 1 the top-left corner takes the colour the left side
+        -- had at the end of the clockwise walk.
+        colours (borderFgBlend [red, blue]) @?= ["\ESC[0;38;2;205;0;0"]
+        colours (borderFgBlend [red, blue] <> borderFgBlendOffset 1) @?= ["\ESC[0;38;2;0;0;238"]
+        colours (borderFgBlend [red, blue] <> borderFgBlendOffset 8) @?= colours (borderFgBlend [red, blue])
+    , testCase "colorWhitespace False keeps the background off padding" $
+        toAnsi defaultRenderEnv (render (bg red <> paddingLeft 1 <> colorWhitespace False) "x") @?= " \ESC[0;41mx\ESC[0m"
+    , testCase "reverse video covers padding" $
+        toAnsi defaultRenderEnv (render (reverseVideo <> paddingLeft 1) "x") @?= "\ESC[0;7m x\ESC[0m"
+    , testCase "underlineSpaces False" $
+        toAnsi defaultRenderEnv (render (underline <> underlineSpaces False) "a b")
+          @?= "\ESC[0;4ma\ESC[0m \ESC[0;4mb\ESC[0m"
+    , testCase "underlineSpaces True without underline" $
+        toAnsi defaultRenderEnv (render (underlineSpaces True) "a b") @?= "a\ESC[0;4m \ESC[0mb"
+    , testCase "strikethroughSpaces False" $
+        toAnsi defaultRenderEnv (render (strikethrough <> strikethroughSpaces False) "a b")
+          @?= "\ESC[0;9ma\ESC[0m \ESC[0;9mb\ESC[0m"
+    , testCase "transform" $ do
+        plainLines (render (transform T.toUpper) ("raow " <> styled bold "meow")) @?= ["RAOW MEOW"]
+        plainLines (frame (transform T.toUpper) (text "raow")) @?= ["raow"]
+    , testCase "unset modifiers" $ do
+        render (padding 1 1 <> unsetPadding) "x" @?= render mempty "x"
+        render (margin 1 1 <> unsetMargins) "x" @?= render mempty "x"
+        render (border roundedBorder <> borderFg red <> unsetBorder) "x" @?= render mempty "x"
+        render (width 10 <> unsetWidth) "x" @?= render mempty "x"
+        render (maxWidth 1 <> unsetMaxWidth) "xy" @?= render mempty "xy"
+        render (width 5 <> align right <> unsetAlign) "x" @?= render (width 5) "x"
+        render (link "u" <> underline <> unsetLink <> unsetUnderline) "x" @?= render mempty "x"
+        render (tabWidth 1 <> unsetTabWidth) "a\tb" @?= render mempty "a\tb"
+        render (transform T.toUpper <> unsetTransform) "x" @?= render mempty "x"
+    , testCase "frame size" $ do
+        let m = padding 1 2 <> border normalBorder <> margin 1 1
+        frameSize m @?= (8, 6)
+        horizontalPadding m @?= 4
+        verticalBorderSize m @?= 2
+        horizontalMargins m @?= 2
+        frameSize (border normalBorder <> borderLeft False) @?= (1, 2)
+    , testCase "getters" $ do
+        let m = bold <> fg red <> width 10 <> maxWidth 8 <> border roundedBorder <> borderTop False <> align center
+        attrBold (getAttrs m) @?= Just True
+        attrFg (getAttrs m) @?= Just red
+        getWidth m @?= Just 10
+        getMaxWidth m @?= Just 8
+        getBorder m @?= Just roundedBorder
+        getBorderSides m @?= Sides False True True True
+        getAlign m @?= center
+        getBorder (mempty :: Mod Style) @?= Nothing
+        attrFg (getAttrs (fg blue :: Mod Table)) @?= Just blue
+    , testCase "table per-side border colours" $
+        T.lines (toAnsi defaultRenderEnv (table (border asciiBorder <> borderLeftFg red <> borderTop False <> borderBottom False) [] [["x"]]))
+          @?= ["\ESC[0;31m|\ESC[0mx|"]
+    ]
 
 renderTests :: TestTree
 renderTests =
