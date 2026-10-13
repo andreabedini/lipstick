@@ -317,3 +317,10 @@ runghc scripts/GenUnicodeTable.hs <version> <directory> > src/Lipstick/Internal/
 
 The conformance test data in `test/data/GraphemeBreakTest.txt` comes from
 `auxiliary/GraphemeBreakTest.txt` at the same version.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). lipstick is a port of
+[lipgloss](https://github.com/charmbracelet/lipgloss), © Charmbracelet,
+also MIT licensed. `test/data/GraphemeBreakTest.txt` is © Unicode, Inc.,
+under the [Unicode terms of use](https://www.unicode.org/terms_of_use.html).

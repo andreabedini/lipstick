@@ -2,11 +2,13 @@ cabal-version:   3.16
 name:            lipstick
 version:         0.1.0.0
 synopsis:        Style definitions for nice terminal layouts
+category:        Console, Text
 description:
   A Haskell take on charmbracelet's lipgloss: styled, laid-out text for
   command-line output. Styles are built from composable modifiers and render
   to structured blocks, which are serialised to ANSI only at the edge.
-license:         NONE
+license:         MIT
+license-file:    LICENSE
 author:          Andrea Bedini
 maintainer:      andrea@bedini.au
 build-type:      Simple
