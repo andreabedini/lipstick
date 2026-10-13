@@ -6,6 +6,7 @@ license:         NONE
 author:          Andrea Bedini
 maintainer:      andrea@bedini.au
 build-type:      Simple
+extra-doc-files: CHANGELOG.md
 
 common warnings
     ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
