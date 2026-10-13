@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Lipstick
-import Lipstick.Terminal (profileFromEnv)
+import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
 import Lipstick.Width (clusters)
 import Numeric (readHex)
 import Test.QuickCheck
@@ -29,6 +29,7 @@ main = do
       , extrasTests
       , tableTests
       , outlineTests
+      , layerTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -306,6 +307,60 @@ outlineTests =
     -- Lines are padded to the block's width.
     withWidth ls w = [l <> T.replicate (w - textWidth l) " " | l <- ls]
 
+layerTests :: TestTree
+layerTests =
+  testGroup
+    "layers"
+    [ testCase "canvas fits all layers" $
+        plainLines (compose [layer mempty "ab", layer (offset 3 1) "cd"]) @?= ["ab   ", "   cd"]
+    , testCase "later layers are on top" $
+        plainLines (compose [layer mempty "aaaa", layer (offset 1 0) "bb"]) @?= ["abba"]
+    , testCase "z-index beats list order" $
+        plainLines (compose [layer (zIndex 1) "aaaa", layer (offset 1 0) "bb"]) @?= ["aaaa"]
+    , testCase "layers are opaque" $
+        plainLines (overlay 0 0 "  " "ab") @?= ["  "]
+    , testCase "transparent layers show unstyled spaces through" $
+        plainLines (compose [layer mempty "abc", layer transparent " X "]) @?= ["aXc"]
+    , testCase "styled spaces are not transparent" $
+        toAnsi defaultRenderEnv (compose [layer mempty "ab", layer transparent (render (bg red) " ")])
+          @?= "\ESC[0;41m \ESC[0mb"
+    , testCase "covering the second half of a wide character" $
+        plainLines (overlay 1 0 "x" "日本") @?= [" x本"]
+    , testCase "covering the first half of a wide character" $
+        plainLines (overlay 2 0 "x" "日本") @?= ["日x "]
+    , testCase "a wide character over narrow ones" $
+        plainLines (overlay 1 0 "日" "abcd") @?= ["a日d"]
+    , testCase "a wide character over two halves" $
+        plainLines (overlay 1 0 "本" "日日") @?= [" 本 "]
+    , testCase "left edge clipping" $
+        plainLines (overlay (-1) 0 "日b" ".....") @?= [" b..."]
+    , testCase "top edge clipping" $
+        plainLines (overlay 0 (-1) "a\nb" "..") @?= ["b."]
+    , testCase "sublayers are relative to their parent" $
+        plainLines (compose [layer (offset 2 1 <> sublayers [layer (offset 1 1) "c"]) "p"])
+          @?= ["   ", "  p", "   c"] `withWidth'` 4
+    , testCase "sublayer z-index is relative" $
+        plainLines (compose [layer (zIndex 2) "aa", layer (zIndex 1 <> sublayers [layer (zIndex 2) "b"]) "x"])
+          @?= ["ba"]
+    , testCase "attributes survive" $
+        toAnsi defaultRenderEnv (overlay 1 0 (render bold "x") "ab") @?= "a\ESC[0;1mx\ESC[0m"
+    , testCase "zero-width clusters do not take a column" $
+        plainLines (overlay 0 0 "a\x200B\&b" "....") @?= ["ab.."]
+    , testCase "layerAt finds the topmost named layer" $ do
+        let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 1 <> layerId "btn") "ok", layer (offset 0 0) "x"]
+        layerAt 1 1 ls @?= Just "btn"
+        layerAt 3 1 ls @?= Just "bg"
+        layerAt 0 0 ls @?= Just "bg"
+        layerAt 9 9 ls @?= Nothing
+    , testProperty "compose is rectangular and fits its layers" $ \placed ->
+        let ls = [layer (offset x y <> zIndex z) (render (specMod s) "日本 text") | (s, (NonNegative x, NonNegative y, z)) <- take 4 placed]
+            b = compose ls
+         in rectangular b
+              .&&. blockWidth b === maximum (0 : [x + blockWidth (render (specMod s) "日本 text") | (s, (NonNegative x, _, _ :: Int)) <- take 4 placed])
+    ]
+  where
+    withWidth' ls w = [l <> T.replicate (w - textWidth l) " " | l <- ls]
+
 renderTests :: TestTree
 renderTests =
   testGroup
@@ -421,6 +476,12 @@ profileTests =
     , testCase "kitty" $ profileFromEnv True [("TERM", "xterm-kitty")] @?= TrueColor
     , testCase "ghostty" $ profileFromEnv True [("TERM", "xterm-ghostty")] @?= TrueColor
     , testCase "plain xterm" $ profileFromEnv True [("TERM", "xterm")] @?= ANSI16
+    , testCase "COLORFGBG dark" $ backgroundFromEnv [("COLORFGBG", "15;0")] @?= Just True
+    , testCase "COLORFGBG light" $ backgroundFromEnv [("COLORFGBG", "0;15")] @?= Just False
+    , testCase "COLORFGBG with default" $ backgroundFromEnv [("COLORFGBG", "0;default;7")] @?= Just False
+    , testCase "COLORFGBG bright black is dark" $ backgroundFromEnv [("COLORFGBG", "7;8")] @?= Just True
+    , testCase "COLORFGBG unparsable" $ backgroundFromEnv [("COLORFGBG", "default;default")] @?= Nothing
+    , testCase "COLORFGBG unset" $ backgroundFromEnv [] @?= Nothing
     ]
 
 -- Properties ------------------------------------------------------------------

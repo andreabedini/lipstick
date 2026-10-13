@@ -170,9 +170,23 @@ module Lipstick
   , renderPlain
   , putBlock
   , hPutBlock
+  , hPutBlockWith
   , detectEnv
+  , detectEnvQuery
   , detectProfile
   , queryDarkBackground
+
+    -- * Compositing
+  , Layer
+  , layer
+  , offset
+  , zIndex
+  , layerId
+  , transparent
+  , sublayers
+  , compose
+  , overlay
+  , layerAt
 
     -- * Measuring text
   , textWidth
@@ -185,6 +199,7 @@ import Lipstick.Block
 import Lipstick.Border
 import Lipstick.Color
 import Lipstick.Internal.Types
+import Lipstick.Layer
 import Lipstick.Mod
 import Lipstick.Outline
 import Lipstick.Place

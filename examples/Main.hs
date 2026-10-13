@@ -2,6 +2,7 @@
 
 module Main (main) where
 
+import Data.Text qualified as T
 import Lipstick
 
 purple, pink, grey :: Color
@@ -101,6 +102,20 @@ outlines =
         ]
     ]
 
+-- | A dialog composited over a background, with a drop shadow.
+dialogScene :: Block
+dialogScene =
+  compose
+    [ layer mempty (render (fg grey) (plain (T.unlines (replicate 8 (T.replicate 60 "╱")))))
+    , layer (offset 13 2 <> zIndex 1) (render (bg "#222222" <> width 34 <> height 6) "")
+    , layer
+        (offset 11 1 <> zIndex 2 <> layerId "dialog")
+        ( render
+            (border roundedBorder <> borderFg pink <> bg "#3C3C3C" <> padding 1 2 <> width 34 <> align center)
+            "Are you sure you want to eat marmalade?"
+        )
+    ]
+
 main :: IO ()
 main = do
   putBlock $
@@ -117,6 +132,7 @@ main = do
       (render (bold <> fg pink) "placed in the middle")
   putBlock languages
   putBlock outlines
+  putBlock dialogScene
   putBlock swatches
   putBlock gradientCard
   putBlock $ render (link "https://github.com/charmbracelet/lipgloss" <> underline) "A hyperlink to lipgloss"

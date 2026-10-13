@@ -27,6 +27,7 @@ library
         Lipstick.Block
         Lipstick.Border
         Lipstick.Color
+        Lipstick.Layer
         Lipstick.Mod
         Lipstick.Place
         Lipstick.Style
