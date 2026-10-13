@@ -1,0 +1,64 @@
+cabal-version:   3.16
+name:            lipstick
+version:         0.1.0.0
+synopsis:        Style definitions for nice terminal layouts
+description:
+  A Haskell take on charmbracelet's lipgloss: styled, laid-out text for
+  command-line output. Styles are built from composable modifiers and render
+  to structured blocks, which are serialised to ANSI only at the edge.
+license:         NONE
+author:          Andrea Bedini
+maintainer:      andrea@bedini.au
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
+common warnings
+    ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
+
+library
+    import:           warnings
+    hs-source-dirs:   src
+    exposed-modules:
+        Lipstick
+        Lipstick.Ansi
+        Lipstick.Block
+        Lipstick.Border
+        Lipstick.Color
+        Lipstick.Mod
+        Lipstick.Place
+        Lipstick.Style
+        Lipstick.Terminal
+        Lipstick.Width
+        Lipstick.Internal.Block
+        Lipstick.Internal.Types
+    build-depends:
+        base ^>=4.21.0.0,
+        text ^>=2.1,
+        ansi-terminal ^>=1.1,
+        colour ^>=2.3
+    default-language: GHC2024
+
+executable lipstick-demo
+    import:           warnings
+    main-is:          Main.hs
+    hs-source-dirs:   examples
+    build-depends:
+        base,
+        text,
+        lipstick
+    default-language: GHC2024
+
+test-suite lipstick-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Main.hs
+    hs-source-dirs:   test
+    build-depends:
+        base,
+        text,
+        lipstick,
+        tasty ^>=1.5,
+        tasty-hunit ^>=0.10,
+        tasty-quickcheck ^>=0.11,
+        QuickCheck >=2.14 && <2.20
+    default-language: GHC2024
