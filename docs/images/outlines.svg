@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390.40" height="226" viewBox="0 0 390.40 226">
+<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.45"/></filter></defs>
+<rect x="24" y="24" width="342.40" height="178" rx="10" fill="#171717" filter="url(#shadow)"/>
+<circle cx="44" cy="42" r="6" fill="#FF5F57"/>
+<circle cx="64" cy="42" r="6" fill="#FEBC2E"/>
+<circle cx="84" cy="42" r="6" fill="#28C840"/>
+<g font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Mono CJK SC', monospace" font-size="14">
+<text x="44" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">.</text>
+<text x="212" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">I</text>
+<text x="220.40" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">.</text>
+<text x="237.20" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">G</text>
+<text x="245.60" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">l</text>
+<text x="254" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">o</text>
+<text x="262.40" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">s</text>
+<text x="270.80" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">s</text>
+<text x="279.20" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">i</text>
+<text x="287.60" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">e</text>
+<text x="296" y="87.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">r</text>
+<g stroke="#874BFD" fill="#874BFD"><line x1="48.20" y1="101" x2="48.20" y2="92" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="101" x2="52.40" y2="101" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="101" x2="48.20" y2="110" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="56.60" y1="101" x2="60.80" y2="101" stroke-width="1.20" stroke-linecap="square"/><line x1="56.60" y1="101" x2="52.40" y2="101" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="65" y1="101" x2="69.20" y2="101" stroke-width="1.20" stroke-linecap="square"/><line x1="65" y1="101" x2="60.80" y2="101" stroke-width="1.20" stroke-linecap="square"/></g>
+<text x="77.60" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">m</text>
+<text x="86" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">a</text>
+<text x="94.40" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">c</text>
+<text x="102.80" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">O</text>
+<text x="111.20" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">S</text>
+<text x="237.20" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">•</text>
+<text x="254" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">C</text>
+<text x="262.40" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">l</text>
+<text x="270.80" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">o</text>
+<text x="279.20" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">u</text>
+<text x="287.60" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">d</text>
+<text x="304.40" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">P</text>
+<text x="312.80" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">a</text>
+<text x="321.20" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">i</text>
+<text x="329.60" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">n</text>
+<text x="338" y="105.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">t</text>
+<g stroke="#874BFD" fill="#874BFD"><line x1="48.20" y1="119" x2="48.20" y2="110" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="119" x2="52.40" y2="119" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="119" x2="48.20" y2="128" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="56.60" y1="119" x2="60.80" y2="119" stroke-width="1.20" stroke-linecap="square"/><line x1="56.60" y1="119" x2="52.40" y2="119" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="65" y1="119" x2="69.20" y2="119" stroke-width="1.20" stroke-linecap="square"/><line x1="65" y1="119" x2="60.80" y2="119" stroke-width="1.20" stroke-linecap="square"/></g>
+<text x="77.60" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">L</text>
+<text x="86" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">i</text>
+<text x="94.40" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">n</text>
+<text x="102.80" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">u</text>
+<text x="111.20" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">x</text>
+<text x="237.20" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">•</text>
+<text x="254" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">B</text>
+<text x="262.40" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">o</text>
+<text x="270.80" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">y</text>
+<text x="287.60" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">B</text>
+<text x="296" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">r</text>
+<text x="304.40" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">o</text>
+<text x="312.80" y="123.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">w</text>
+<g stroke="#874BFD" fill="#874BFD"><line x1="48.20" y1="137" x2="48.20" y2="128" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="137" x2="48.20" y2="146" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="81.80" y1="137" x2="81.80" y2="128" stroke-width="1.20" stroke-linecap="square"/><line x1="81.80" y1="137" x2="86" y2="137" stroke-width="1.20" stroke-linecap="square"/><line x1="81.80" y1="137" x2="81.80" y2="146" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="90.20" y1="137" x2="94.40" y2="137" stroke-width="1.20" stroke-linecap="square"/><line x1="90.20" y1="137" x2="86" y2="137" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="98.60" y1="137" x2="102.80" y2="137" stroke-width="1.20" stroke-linecap="square"/><line x1="98.60" y1="137" x2="94.40" y2="137" stroke-width="1.20" stroke-linecap="square"/></g>
+<text x="111.20" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">N</text>
+<text x="119.60" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">i</text>
+<text x="128" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">x</text>
+<text x="136.40" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">O</text>
+<text x="144.80" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">S</text>
+<text x="203.60" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">I</text>
+<text x="212" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">I</text>
+<text x="220.40" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#F25D94">.</text>
+<text x="237.20" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">N</text>
+<text x="245.60" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">y</text>
+<text x="254" y="141.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">x</text>
+<g stroke="#874BFD" fill="#874BFD"><line x1="48.20" y1="155" x2="48.20" y2="146" stroke-width="1.20" stroke-linecap="square"/><line x1="48.20" y1="155" x2="48.20" y2="164" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><path d="M 86 155 H 86 A 4.20 4.20 0 0 1 81.80 150.80 V 146" fill="none" stroke-width="1.2"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="90.20" y1="155" x2="94.40" y2="155" stroke-width="1.20" stroke-linecap="square"/><line x1="90.20" y1="155" x2="86" y2="155" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="98.60" y1="155" x2="102.80" y2="155" stroke-width="1.20" stroke-linecap="square"/><line x1="98.60" y1="155" x2="94.40" y2="155" stroke-width="1.20" stroke-linecap="square"/></g>
+<text x="111.20" y="159.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">A</text>
+<text x="119.60" y="159.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">r</text>
+<text x="128" y="159.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">c</text>
+<text x="136.40" y="159.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">h</text>
+<g stroke="#874BFD" fill="#874BFD"><path d="M 52.40 173 H 52.40 A 4.20 4.20 0 0 1 48.20 168.80 V 164" fill="none" stroke-width="1.2"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="56.60" y1="173" x2="60.80" y2="173" stroke-width="1.20" stroke-linecap="square"/><line x1="56.60" y1="173" x2="52.40" y2="173" stroke-width="1.20" stroke-linecap="square"/></g>
+<g stroke="#874BFD" fill="#874BFD"><line x1="65" y1="173" x2="69.20" y2="173" stroke-width="1.20" stroke-linecap="square"/><line x1="65" y1="173" x2="60.80" y2="173" stroke-width="1.20" stroke-linecap="square"/></g>
+<text x="77.60" y="177.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">B</text>
+<text x="86" y="177.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">S</text>
+<text x="94.40" y="177.68" textLength="8.40" lengthAdjust="spacingAndGlyphs" fill="#DDDDDD">D</text>
+</g>
+</svg>

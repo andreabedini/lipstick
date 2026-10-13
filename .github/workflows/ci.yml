@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: '9.12.2'
+          cabal-version: '3.16.1.0'
+
+      - name: Resolve dependencies
+        run: |
+          cabal update
+          cabal build all --enable-tests --dry-run
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: cabal-${{ runner.os }}-ghc-9.12.2-${{ hashFiles('dist-newstyle/cache/plan.json') }}
+          restore-keys: cabal-${{ runner.os }}-ghc-9.12.2-
+
+      - name: Build
+        run: cabal build all --enable-tests
+
+      - name: Test
+        run: cabal test all --test-show-details=direct
+
+      # The README screenshots are drawn from examples/Screenshots.hs; any
+      # change in rendering must come with updated images.
+      - name: Check screenshots are up to date
+        run: |
+          cabal run -v0 lipstick-screenshots -- docs/images
+          if [ -n "$(git status --porcelain -- docs/images)" ]; then
+            git status --short -- docs/images
+            git diff --stat -- docs/images
+            echo "::error::Rendering changed: run 'cabal run lipstick-screenshots -- docs/images' and commit docs/images"
+            exit 1
+          fi

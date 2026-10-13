@@ -23,16 +23,7 @@ main :: IO ()
 main = putBlock (render card "Hello, kitty")
 ```
 
-```
-╭──────────────────────╮
-│                      │
-│    Hello, kitty      │
-│                      │
-╰──────────────────────╯
-```
-
-The outputs in this README are shown without colours. `cabal run
-lipstick-demo` shows them all in a terminal.
+![A purple card with a rounded border saying "Hello, kitty"](docs/images/quickstart.svg)
 
 lipstick builds with GHC 9.12 and is not on Hackage yet. To use it, add
 the repository to your `cabal.project`:
@@ -93,24 +84,15 @@ joinHorizontal center
   ]
 ```
 
-```
-╭──────────────────────╮  ╭──────────────────────╮
-│                      │  │                      │
-│    Hello, kitty      │  │    Later settings    │
-│                      │  │    win               │
-╰──────────────────────╯  │                      │
-                          ╰──────────────────────╯
-```
+![Two cards side by side, purple and pink, centred vertically](docs/images/layout.svg)
 
 ```haskell
-place (width 30 <> height 3 <> align center <> valign center <> whitespaceChars "·") "centred"
+place
+  (width 30 <> height 3 <> align center <> valign center <> whitespaceChars "·" <> fg "#383838")
+  (render (bold <> fg "#F25D94") "centred")
 ```
 
-```
-······························
-···········centred············
-······························
-```
+![The word "centred" in the middle of an area filled with dots](docs/images/place.svg)
 
 `frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
 stack blocks, and `blockWidth` / `blockHeight` measure them.
@@ -122,16 +104,12 @@ nest: the attributes of the enclosing style show through wherever the inner
 ones do not set them.
 
 ```haskell
-render (width 30 <> border normalBorder <> padding 0 1)
-  (styled (bold <> fg red) "Error: " <> "the file " <> styled italic "notes.txt" <> " was not found")
+render
+  (width 30 <> border normalBorder <> borderFg "#874BFD" <> padding 0 1)
+  (styled (bold <> fg "#F25D94") "Error: " <> "the file " <> styled italic "notes.txt" <> " was not found")
 ```
 
-```
-┌────────────────────────────┐
-│ Error: the file notes.txt  │
-│ was not found              │
-└────────────────────────────┘
-```
+![A bordered message with a bold pink "Error:" and an italic file name, wrapped to two lines](docs/images/text.svg)
 
 Output from other programs that already contains escape sequences goes
 through `fromAnsi`, which keeps colours, attributes and hyperlinks and drops
@@ -139,12 +117,6 @@ everything else:
 
 ```haskell
 render (border roundedBorder) (fromAnsi "\ESC[1;32mok\ESC[0m 3 tests passed")
-```
-
-```
-╭─────────────────╮
-│ok 3 tests passed│
-╰─────────────────╯
 ```
 
 Also: `wrap` (word wrap with extra break characters such as `-`),
@@ -160,8 +132,8 @@ combining marks line up.
 ```haskell
 table
   ( borderFg "#874BFD"
-      <> headerStyle (bold <> align center)
-      <> cellStyle (\c -> padding 0 1 <> if odd (cellRow c) then faint else mempty)
+      <> headerStyle (bold <> fg "#F25D94" <> align center)
+      <> cellStyle (\case BodyCell r _ | odd r -> padding 0 1 <> faint; _ -> padding 0 1)
   )
   ["Language", "Formal", "Informal"]
   [ ["Chinese", "您好", "你好"]
@@ -170,15 +142,7 @@ table
   ]
 ```
 
-```
-╭──────────┬──────────────┬──────────╮
-│ Language │    Formal    │ Informal │
-├──────────┼──────────────┼──────────┤
-│ Chinese  │ 您好         │ 你好     │
-│ Japanese │ こんにちは   │ やあ     │
-│ Russian  │ Здравствуйте │ Привет   │
-╰──────────┴──────────────┴──────────╯
-```
+![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
 
 With a `width`, columns shrink (wrapping their cells) or grow to fit it;
 `fitContent` makes the width a maximum instead. With a `height`, rows that
@@ -193,31 +157,15 @@ tables included.
 
 ```haskell
 tree
-  (enumerator roundedTreeEnumerator <> enumeratorStyle (fg "#874BFD"))
+  (enumerator roundedTreeEnumerator <> enumeratorStyle (fg "#874BFD") <> rootStyle (fg "#F25D94"))
   (Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" []], Node "BSD" []])
-```
 
-```
-.
-├── macOS
-├── Linux
-│   ├── NixOS
-│   ╰── Arch
-╰── BSD
-```
-
-```haskell
 nestedList
-  (enumeratorBy (\depth -> if depth == 0 then roman else bullet))
+  (enumeratorBy (\depth -> if depth == 0 then roman else bullet) <> enumeratorStyle (fg "#F25D94"))
   [Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []], Node "Nyx" []]
 ```
 
-```
- I. Glossier
-    • Cloud Paint
-    • Boy Brow
-II. Nyx
-```
+![A tree of operating systems with rounded purple branches, next to a list numbered with roman numerals and nested bullets](docs/images/outlines.svg)
 
 The enumerators are `treeEnumerator`, `roundedTreeEnumerator`, `bullet`,
 `dash`, `asterisk`, `arabic`, `alphabet` and `roman`, or your own. Items,
@@ -230,17 +178,15 @@ Blocks can be stacked at any position, for dialogs, overlays and the like.
 
 ```haskell
 compose
-  [ layer mempty background
-  , layer (offset 6 0 <> zIndex 1 <> layerId "dialog") (render (border roundedBorder <> padding 0 1) "Really quit?")
+  [ layer (fg "#383838") background
+  , layer (offset 7 2 <> zIndex 1) (render (bg "#0A0A0A" <> width 22 <> height 3) "")
+  , layer
+      (offset 5 1 <> zIndex 2 <> layerId "dialog")
+      (render (border roundedBorder <> borderFg "#F25D94" <> bg "#3C3C3C" <> padding 0 2 <> width 22 <> align center) "Really quit?")
   ]
 ```
 
-```
-╱╱╱╱╱╱╭──────────────╮╱╱╱╱╱╱
-╱╱╱╱╱╱│ Really quit? │╱╱╱╱╱╱
-╱╱╱╱╱╱╰──────────────╯╱╱╱╱╱╱
-╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
-```
+![A dialog saying "Really quit?" with a drop shadow, over a hatched background](docs/images/layers.svg)
 
 ## Colours
 
@@ -254,6 +200,21 @@ when printing:
 `blend` and `blend2D` make gradients, `darken`, `lighten` and `complementary`
 adjust colours; they work in the OkLab colour space. `borderFgBlend` draws a
 gradient around a border.
+
+```haskell
+vcat
+  [ hcat [render (bg c) "  " | c <- blend 24 ["#7D56F4", "#F25D94", "#FAD45A"]]
+  , text ""
+  , render
+      (border roundedBorder <> borderFgBlend ["#7D56F4", "#F25D94", "#FAD45A"] <> padding 1 4)
+      ( styled (fg (darken 0.4 "#F25D94")) "darker "
+          <> styled (fg "#F25D94") "pink "
+          <> styled (fg (lighten 0.4 "#F25D94")) "lighter"
+      )
+  ]
+```
+
+![A purple-to-pink-to-yellow gradient, and a box with a gradient border containing darker, normal and lighter pink text](docs/images/colours.svg)
 
 ## Output
 
@@ -313,6 +274,16 @@ cabal build all
 cabal test all
 cabal run lipstick-demo
 ```
+
+The screenshots in this README are drawn from the examples in
+`examples/Screenshots.hs`, as SVG on the terminal's cell grid:
+
+```
+cabal run lipstick-screenshots -- docs/images
+```
+
+CI regenerates them and fails if they differ from the committed ones, so a
+change in rendering shows up as a diff of `docs/images`.
 
 The Unicode tables in `src/Lipstick/Internal/UnicodeTable.hs` are generated
 from the Unicode Character Database, at the version GHC's `base` uses (see

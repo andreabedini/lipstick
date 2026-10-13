@@ -74,7 +74,7 @@ languages =
     ( borderFg purple
         <> width 46
         <> headerStyle (bold <> fg pink <> align center)
-        <> cellStyle (\c -> padding 0 1 <> if odd (cellRow c) then fg grey else mempty)
+        <> cellStyle (\case BodyCell r _ | odd r -> padding 0 1 <> fg grey; _ -> padding 0 1)
     )
     ["Language", "Formal", "Informal"]
     [ ["Chinese", "您好", "你好"]

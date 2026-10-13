@@ -67,6 +67,18 @@ executable lipstick-demo
         lipstick
     default-language: GHC2024
 
+executable lipstick-screenshots
+    import:           warnings
+    main-is:          Screenshots.hs
+    other-modules:    Svg
+    hs-source-dirs:   examples
+    build-depends:
+        base,
+        filepath,
+        text,
+        lipstick
+    default-language: GHC2024
+
 test-suite lipstick-test
     import:           warnings
     type:             exitcode-stdio-1.0
