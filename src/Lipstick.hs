@@ -43,6 +43,9 @@ module Lipstick
   , plain
   , styled
   , fromAnsi
+  , wrap
+  , styleRanges
+  , styleIndices
   , Attrs (..)
 
     -- * Layout
@@ -243,6 +246,8 @@ module Lipstick
 
     -- * Measuring text
   , textWidth
+  , ansiWidth
+  , ansiHeight
   , unicodeVersion
   ) where
 

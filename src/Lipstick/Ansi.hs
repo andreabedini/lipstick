@@ -8,6 +8,8 @@ module Lipstick.Ansi
   , toAnsi
   , renderPlain
   , fromAnsi
+  , ansiWidth
+  , ansiHeight
   ) where
 
 import Data.Char (isDigit)
@@ -255,3 +257,12 @@ applySGR groups a = case groups of
       4 -> DottedUnderline
       5 -> DashedUnderline
       _ -> SingleUnderline
+
+-- | The display width of text that may contain escape sequences: the width
+-- of its widest line.
+ansiWidth :: Text -> Int
+ansiWidth = blockWidth . fromCellLines . inlineLines 4 . fromAnsi
+
+-- | The number of lines of text that may contain escape sequences.
+ansiHeight :: Text -> Int
+ansiHeight = blockHeight . fromCellLines . inlineLines 4 . fromAnsi

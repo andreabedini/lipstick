@@ -26,6 +26,7 @@ module Lipstick.Color
     -- colours are transformed in every variant.
   , mix
   , blend
+  , blend2D
   , darken
   , lighten
   , complementary
@@ -333,3 +334,30 @@ fromOkLab (OkLab ll a b) =
     gamma x =
       let v = if x <= 0.0031308 then 12.92 * x else 1.055 * x ** (1 / 2.4) - 0.055
        in round (255 * clamp01 v)
+
+-- | A two-dimensional gradient, as rows of colours: the gradient runs
+-- through the stops along the direction given by an angle in degrees,
+-- anticlockwise as in lipgloss (0 is left to right, 90 bottom to top).
+blend2D :: Int -> Int -> Double -> [Color] -> [[Color]]
+blend2D w0 h0 angle stops = case stops of
+  [] -> []
+  [c] -> replicate h (replicate w c)
+  _ -> [[at x y | x <- [0 .. w - 1]] | y <- [0 .. h - 1]]
+  where
+    w = max 1 w0
+    h = max 1 h0
+    gradient = blend (max w h) stops
+    -- Without this, right angles pick up rounding noise (cos 270° is about
+    -- -1.8e-16) that can tip cells on a boundary into the wrong colour.
+    snap v = if abs v < 1e-9 then 0 else v
+    gradientLen = fromIntegral (length gradient - 1) :: Double
+    rad = angle * pi / 180
+    centreX = fromIntegral (w - 1) / 2
+    centreY = fromIntegral (h - 1) / 2
+    diagonal = sqrt (fromIntegral (w * w + h * h))
+    at x y =
+      let dx = fromIntegral x - centreX
+          dy = fromIntegral y - centreY
+          along = dx * snap (cos rad) - dy * snap (sin rad)
+          pos = clamp01 ((along + diagonal / 2) / diagonal)
+       in gradient !! min (length gradient - 1) (floor (pos * gradientLen))

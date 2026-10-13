@@ -32,6 +32,7 @@ main = do
       , layerTests
       , commonPropsTests
       , styleParityTests
+      , textParityTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -479,6 +480,47 @@ styleParityTests =
     , testCase "table per-side border colours" $
         T.lines (toAnsi defaultRenderEnv (table (border asciiBorder <> borderLeftFg red <> borderTop False <> borderBottom False) [] [["x"]]))
           @?= ["\ESC[0;31m|\ESC[0mx|"]
+    ]
+
+textParityTests :: TestTree
+textParityTests =
+  testGroup
+    "text and colour parity"
+    [ testCase "wrap breaks after break characters" $
+        plainLines (wrap 10 "-" "long-winded words") @?= ["long- ", "winded", "words "]
+    , testCase "wrap without break characters" $
+        plainLines (wrap 10 "" "long-winded words") @?= ["long-winde", "d words   "]
+    , testCase "styleRanges" $
+        toAnsi defaultRenderEnv (fromInline (styleRanges [(0, 3, bold)] "foobar"))
+          @?= "\ESC[0;1mfoo\ESC[0mbar"
+    , testCase "styleRanges counts display columns" $
+        toAnsi defaultRenderEnv (fromInline (styleRanges [(2, 4, bold)] "日本語"))
+          @?= "日\ESC[0;1m本\ESC[0m語"
+    , testCase "styleRanges keeps the text's own attributes" $
+        toAnsi defaultRenderEnv (fromInline (styleRanges [(1, 2, bold)] (styled (fg red) "abc")))
+          @?= "\ESC[0;31ma\ESC[0;1;31mb\ESC[0;31mc\ESC[0m"
+    , testCase "styleRanges across lines" $
+        toAnsi defaultRenderEnv (fromInline (styleRanges [(1, 3, bold)] "ab\ncd"))
+          @?= "a\ESC[0;1mb\ESC[0m\n\ESC[0;1mc\ESC[0md"
+    , testCase "styleIndices" $
+        toAnsi defaultRenderEnv (fromInline (styleIndices [0, 3] underline faint "foobar"))
+          @?= "\ESC[0;4mf\ESC[0;2moo\ESC[0;4mb\ESC[0;2mar\ESC[0m"
+    , testCase "ansiWidth and ansiHeight" $ do
+        ansiWidth "\ESC[31m日本\ESC[0m\nab" @?= 4
+        ansiHeight "\ESC[31m日本\ESC[0m\nab" @?= 2
+        ansiWidth (toAnsi defaultRenderEnv (render (border roundedBorder <> padding 0 1) "hi")) @?= 6
+    , testCase "blend2D shape" $ do
+        let g = blend2D 4 3 45 [red, blue]
+        length g @?= 3
+        map length g @?= [4, 4, 4]
+        blend2D 2 2 0 [green] @?= [[green, green], [green, green]]
+        blend2D 2 2 0 [] @?= []
+    , testCase "blend2D directions" $ do
+        let rowsOf a = blend2D 5 3 a [red, blue]
+        all (\r -> all (== take 1 r) [[c] | c <- r]) (rowsOf 90) @? "rows are uniform at 90 degrees"
+        rowsOf 270 @?= reverse (rowsOf 90)
+        map reverse (rowsOf 180) @?= rowsOf 0
+        take 1 (rowsOf 90) /= drop 2 (rowsOf 90) @? "top and bottom differ"
     ]
 
 renderTests :: TestTree

@@ -12,6 +12,9 @@ module Lipstick.Block
   , Inline
   , plain
   , styled
+  , wrap
+  , styleRanges
+  , styleIndices
 
     -- * Joining
   , joinHorizontal
@@ -22,9 +25,11 @@ module Lipstick.Block
 
 import Data.List (transpose)
 import Data.Text (Text)
+import Data.Text qualified as T
 import Lipstick.Internal.Block
 import Lipstick.Internal.Types
-import Lipstick.Mod (Mod, Props (..), runMod)
+import Lipstick.Mod (Mod, Props (..), propsOf, runMod)
+import Lipstick.Width (clusters)
 
 -- | Unstyled text; lines are split on newlines.
 text :: Text -> Block
@@ -68,3 +73,42 @@ hcat = joinHorizontal top
 -- | Stacked, aligned to the left.
 vcat :: [Block] -> Block
 vcat = joinVertical left
+
+-- | Word-wrap text to a width, breaking at spaces and after any of the
+-- given characters, without any box around it.
+--
+-- > wrap 20 "-" "a long-winded, hyphenated sentence"
+wrap :: Int -> [Char] -> Inline -> Block
+wrap w breakpoints = fromCellLines . concatMap (wrapCellsWith breakpoints w) . inlineLines 4
+
+-- | Add attributes to ranges of display columns @[start, end)@, counted
+-- across the text with newlines taking no columns. The range attributes
+-- go on top of the text's own.
+--
+-- > styleRanges [(0, 3, bold <> fg red)] "foobar"
+styleRanges :: [(Int, Int, Mod Inline)] -> Inline -> Inline
+styleRanges ranges = restyle $ \col _ ->
+  mconcat [propAttrs (propsOf m) | (s, e, m) <- ranges, col >= s, col < e]
+
+-- | Add attributes to the characters (grapheme clusters, not counting
+-- newlines) at the given indices, and other attributes to the rest. Handy
+-- for highlighting fuzzy-search matches.
+--
+-- > styleIndices [0, 3] (fg pink <> underline) mempty "foobar"
+styleIndices :: [Int] -> Mod Inline -> Mod Inline -> Inline -> Inline
+styleIndices indices matched unmatched = restyle $ \_ i ->
+  propAttrs (propsOf (if i `elem` indices then matched else unmatched))
+
+-- | Layer extra attributes over each cluster, given its starting column and
+-- its index.
+restyle :: (Int -> Int -> Attrs) -> Inline -> Inline
+restyle extra (Inline segs) = Inline (merge (go 0 0 [(a, c, cw) | (a, t) <- segs, (c, cw) <- clusters t]))
+  where
+    go _ _ [] = []
+    go col i ((a, c, cw) : rest)
+      | T.any (== '\n') c = (a, c) : go col i rest
+      | otherwise = (a <> extra col i, c) : go (col + cw) (i + 1) rest
+    merge ((a1, t1) : (a2, t2) : rest)
+      | a1 == a2 = merge ((a1, t1 <> t2) : rest)
+    merge (x : rest) = x : merge rest
+    merge [] = []

@@ -22,6 +22,7 @@ module Lipstick.Internal.Block
   , alignCells
   , cropCells
   , wrapCells
+  , wrapCellsWith
   , truncateCells
   , overCellAttrs
 
@@ -137,13 +138,24 @@ cropCells n cs
 -- | Greedy word wrap to @w@ columns. Spaces at a break are dropped; words
 -- longer than a line are broken. Leading spaces are kept as indentation.
 wrapCells :: Int -> [Cell] -> [[Cell]]
-wrapCells w0 cells
+wrapCells = wrapCellsWith []
+
+-- | Like 'wrapCells', also allowing a break after any of the given
+-- characters (such as @-@).
+wrapCellsWith :: [Char] -> Int -> [Cell] -> [[Cell]]
+wrapCellsWith breakpoints w0 cells
   | cellsWidth cells <= w = [cells]
   | otherwise = go [] 0 (tokens cells)
   where
     w = max 1 w0
     isSpaceCell c = cellText c == T.singleton ' '
-    tokens = groupBy ((==) `on` isSpaceCell)
+    tokens = concatMap splitAfterBreaks . groupBy ((==) `on` isSpaceCell)
+    isBreak c = T.length (cellText c) == 1 && T.head (cellText c) `elem` breakpoints
+    splitAfterBreaks tok
+      | all isSpaceCell tok = [tok]
+      | otherwise = case break isBreak tok of
+          (a, b : rest) | not (null rest) -> (a ++ [b]) : splitAfterBreaks rest
+          _ -> [tok]
     isSpaceTok = all isSpaceCell
 
     -- acc holds the current line's tokens in reverse.
