@@ -23,12 +23,15 @@ module Lipstick.Mod
   , HasBorder (..)
   , HasSize (..)
   , HasAlign (..)
+  , HasWrap (..)
   , Sides (..)
   , uniformSides
   , Box (..)
   , defBox
   , BorderProps (..)
   , defBorderProps
+  , Edges (..)
+  , borderEdges
   , Size (..)
   , defSize
   , Align (..)
@@ -88,10 +91,14 @@ module Lipstick.Mod
     -- * Alignment
   , align
   , valign
+
+    -- * Wrapping
+  , noWrap
   ) where
 
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
-import Lipstick.Border (Border)
+import Lipstick.Border (Border, normalBorder)
 import Lipstick.Color (Color)
 import Lipstick.Internal.Types
 
@@ -131,6 +138,10 @@ class HasSize f where
 class HasAlign f where
   overAlign :: (Align -> Align) -> f -> f
 
+-- | Things whose text can be wrapped.
+class HasWrap f where
+  overWrap :: (Bool -> Bool) -> f -> f
+
 data Sides a = Sides {sideTop, sideRight, sideBottom, sideLeft :: !a}
   deriving (Eq, Show)
 
@@ -164,6 +175,19 @@ data BorderProps = BorderProps
 
 defBorderProps :: BorderProps
 defBorderProps = BorderProps Nothing (uniformSides Nothing) Nothing Nothing []
+
+-- | Which sides of a border are drawn.
+data Edges = Edges {edgeTop, edgeRight, edgeBottom, edgeLeft :: !Bool}
+  deriving (Eq, Show)
+
+-- | The characters to draw a border with, and the sides to draw. Without
+-- characters, sides switched on explicitly use 'normalBorder'.
+borderEdges :: BorderProps -> (Border, Edges)
+borderEdges p =
+  let on side = fromMaybe (isJust (borderChars p)) (side (borderSides p))
+   in ( fromMaybe normalBorder (borderChars p)
+      , Edges (on sideTop) (on sideRight) (on sideBottom) (on sideLeft)
+      )
 
 -- | Width and height include padding and border, but not margins.
 data Size = Size
@@ -334,3 +358,9 @@ align p = Mod (overAlign (\a -> a {alignH = p}))
 -- | Vertical alignment.
 valign :: HasAlign f => Position -> Mod f
 valign p = Mod (overAlign (\a -> a {alignV = p}))
+
+-- Wrapping --------------------------------------------------------------------
+
+-- | Cut lines that are too long with an ellipsis instead of wrapping them.
+noWrap :: HasWrap f => Mod f
+noWrap = Mod (overWrap (const False))

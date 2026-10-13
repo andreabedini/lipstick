@@ -30,6 +30,8 @@ library
         Lipstick.Mod
         Lipstick.Place
         Lipstick.Style
+        Lipstick.Table
+        Lipstick.Outline
         Lipstick.Terminal
         Lipstick.Width
         Lipstick.Internal.Block
@@ -40,7 +42,8 @@ library
         array ^>=0.5,
         text ^>=2.1,
         ansi-terminal ^>=1.1,
-        colour ^>=2.3
+        colour ^>=2.3,
+        containers >=0.6 && <0.8
     default-language: GHC2024
 
 executable lipstick-demo

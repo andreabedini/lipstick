@@ -22,6 +22,7 @@ module Lipstick.Internal.Block
   , alignCells
   , cropCells
   , wrapCells
+  , truncateCells
   , overCellAttrs
 
     -- * Inline text
@@ -172,6 +173,23 @@ wrapCells w0 cells
         | cellWidth c <= n -> let (a, b) = takeWidth (n - cellWidth c) rest in (c : a, b)
         | n == w -> ([c], rest) -- a cluster wider than the line: take it anyway
       _ -> ([], cs)
+
+-- | Cut a line to at most @w@ columns, ending with an ellipsis when
+-- something was cut.
+truncateCells :: Int -> [Cell] -> [Cell]
+truncateCells w cs
+  | cellsWidth cs <= w = cs
+  | w <= 0 = []
+  | otherwise =
+      let kept = cropCells (w - 1) cs
+          a = case reverse kept of
+            c : _ -> cellAttrs c
+            [] -> maybe mempty cellAttrs (safeHead cs)
+       in kept ++ [Cell a (T.singleton '…') 1]
+  where
+    safeHead xs = case xs of
+      x : _ -> Just x
+      [] -> Nothing
 
 overCellAttrs :: (Attrs -> Attrs) -> [[Cell]] -> [[Cell]]
 overCellAttrs f = map (map (\c -> c {cellAttrs = f (cellAttrs c)}))

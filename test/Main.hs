@@ -27,6 +27,8 @@ main = do
       , blendTests
       , fromAnsiTests
       , extrasTests
+      , tableTests
+      , outlineTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -202,6 +204,108 @@ extrasTests =
           @?= render (border normalBorder <> borderFg green) "x"
     ]
 
+tableTests :: TestTree
+tableTests =
+  testGroup
+    "table"
+    [ testCase "defaults" $
+        plainLines (table mempty ["A", "Bb"] [["1", "2"], ["333"]])
+          @?= [ "╭───┬──╮"
+              , "│A  │Bb│"
+              , "├───┼──┤"
+              , "│1  │2 │"
+              , "│333│  │"
+              , "╰───┴──╯"
+              ]
+    , testCase "row rules, no header rule, padded cells" $
+        plainLines (table (border normalBorder <> rowRules True <> headerRule False <> cellStyle (const (padding 0 1))) ["A"] [["1"], ["2"]])
+          @?= ["┌───┐", "│ A │", "│ 1 │", "├───┤", "│ 2 │", "└───┘"]
+    , testCase "no column rules" $
+        plainLines (table (border asciiBorder <> columnRules False) [] [["a", "b"]]) @?= ["+--+", "|ab|", "+--+"]
+    , testCase "markdown" $
+        plainLines (table (border markdownBorder <> borderTop False <> borderBottom False <> cellStyle (const (padding 0 1))) ["A", "B"] [["1", "2"]])
+          @?= ["| A | B |", "|---|---|", "| 1 | 2 |"]
+    , testCase "no outer border" $
+        plainLines (table (borderTop False <> borderBottom False <> borderLeft False <> borderRight False) ["A", "B"] [["1", "2"]])
+          @?= ["A│B", "─┼─", "1│2"]
+    , testCase "width grows columns" $
+        plainLines (table (width 9) ["A", "B"] [["1", "2"]])
+          @?= ["╭───┬───╮", "│A  │B  │", "├───┼───┤", "│1  │2  │", "╰───┴───╯"]
+    , testCase "width shrinks and wraps the widest column" $
+        plainLines (table (width 12) ["Id", "Text"] [["1", "one two three"]])
+          @?= ["╭──┬───────╮", "│Id│Text   │", "├──┼───────┤", "│1 │one two│", "│  │three  │", "╰──┴───────╯"]
+    , testCase "noWrap truncates" $
+        plainLines (table (width 12 <> noWrap) ["Id", "Text"] [["1", "one two three"]])
+          @?= ["╭──┬───────╮", "│Id│Text   │", "├──┼───────┤", "│1 │one tw…│", "╰──┴───────╯"]
+    , testCase "header style" $
+        toAnsi defaultRenderEnv (table (border hiddenBorder <> borderTop False <> borderBottom False <> headerRule False <> columnRules False <> headerStyle bold) ["H"] [["b"]])
+          @?= " \ESC[0;1mH\ESC[0m \n b "
+    , testCase "cell positions" $ do
+        let b = table (cellStyle (\c -> if cellRow c == 1 && cellColumn c == 0 then fg red else mempty) <> border hiddenBorder) ["h"] [["a"], ["b"]]
+        assertBool "only the second body row is red" $
+          T.count "\ESC[0;31m" (toAnsi defaultRenderEnv b) == 1 && "\ESC[0;31mb" `T.isInfixOf` toAnsi defaultRenderEnv b
+    , testCase "border colour" $
+        T.isPrefixOf "\ESC[0;31m╭" (toAnsi defaultRenderEnv (table (borderFg red) [] [["x"]])) @? "border is red"
+    , testCase "empty table" $ blockHeight (table mempty [] []) @?= 0
+    , testCase "maxWidth crops" $ blockWidth (table (maxWidth 4) ["abcdef"] []) @?= 4
+    , testProperty "rectangular and respects width" $ \(Positive extra) (TableData hs rs) ->
+        let natural = table mempty hs rs
+            target = blockWidth natural + extra - 3
+            b = table (width target) hs rs
+         in blockWidth natural > 0 && target >= 2 * length (concat (hs : rs)) + 2 ==>
+              rectangular b .&&. blockWidth b === target
+    ]
+
+-- | Table contents: a header and ragged rows of short words.
+data TableData = TableData [Inline] [[Inline]]
+  deriving (Show)
+
+instance Arbitrary TableData where
+  arbitrary = do
+    let cell = elements ["a", "bb", "ccc dd", "日本", "", "longer words here"]
+    hs <- resize 4 (listOf cell)
+    rs <- resize 4 (listOf (resize 4 (listOf cell)))
+    pure (TableData hs rs)
+
+outlineTests :: TestTree
+outlineTests =
+  testGroup
+    "outline"
+    [ testCase "tree" $
+        plainLines (tree mempty (Node "." [Node "a" [], Node "b" [Node "c" [], Node "d" []], Node "e" []]))
+          @?= [".      ", "├── a  ", "├── b  ", "│   ├── c", "│   └── d", "└── e  "] `withWidth` 9
+    , testCase "multi-line items continue the branch" $
+        plainLines (tree mempty (Node "r" [Node "a\nb" [], Node "c" []]))
+          @?= ["r", "├── a", "│   b", "└── c"] `withWidth` 5
+    , testCase "rounded tree" $
+        plainLines (forest (enumerator roundedTreeEnumerator) [Node "a" [], Node "b" []]) @?= ["├── a", "╰── b"]
+    , testCase "bullet list" $ plainLines (list mempty ["a", "b"]) @?= ["• a", "• b"]
+    , testCase "numbers are right-aligned" $
+        take 2 (drop 8 (plainLines (list (enumerator arabic) (map (text . T.pack . show) [1 .. 10 :: Int]))))
+          @?= [" 9. 9 ", "10. 10"]
+    , testCase "alphabet" $
+        map (T.take 4) (plainLines (list (enumerator alphabet) (replicate 28 "x"))) !! 27 @?= "AB. "
+    , testCase "roman" $
+        map (T.takeWhile (/= '.')) (plainLines (list (enumerator roman) (replicate 14 "x"))) !! 13 @?= " XIV"
+    , testCase "nested list with an enumerator per depth" $
+        plainLines (nestedList (enumeratorBy (\d -> if d == 0 then arabic else dash)) [Node "a" [Node "b" []], Node "c" []])
+          @?= ["1. a  ", "   - b", "2. c  "]
+    , testCase "item and enumerator styles" $
+        toAnsi defaultRenderEnv (list (itemStyle bold <> enumeratorStyle (fg red)) ["a"])
+          @?= "\ESC[0;31m• \ESC[0;1ma\ESC[0m"
+    , testCase "items by position" $
+        plainLines (list (itemStyleWith (\p -> if itemIndex p == 1 then paddingLeft 2 else mempty)) ["a", "b"])
+          @?= ["• a  ", "•   b"]
+    , testCase "root style" $
+        toAnsi defaultRenderEnv (tree (rootStyle bold) (Node "r" [])) @?= "\ESC[0;1mr\ESC[0m"
+    , testCase "a table inside a tree" $
+        plainLines (tree mempty (Node "r" [Node (table (border asciiBorder) [] [["x"]]) []]))
+          @?= ["r      ", "└── +-+", "    |x|", "    +-+"]
+    ]
+  where
+    -- Lines are padded to the block's width.
+    withWidth ls w = [l <> T.replicate (w - textWidth l) " " | l <- ls]
+
 renderTests :: TestTree
 renderTests =
   testGroup
@@ -239,6 +343,10 @@ renderTests =
     , testCase "frame does not rewrap" $
         plainLines (frame (border asciiBorder) (text "a b c"))
           @?= ["+-----+", "|a b c|", "+-----+"]
+    , testCase "noWrap truncates with an ellipsis" $
+        plainLines (render (width 5 <> noWrap) "abcdefgh\nabc") @?= ["abcd…", "abc  "]
+    , testCase "noWrap does not cut a wide character in half" $
+        plainLines (render (width 4 <> noWrap) "日本語") @?= ["日 …"]
     , testCase "inherit keeps padding" $
         plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
     ]

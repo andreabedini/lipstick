@@ -67,6 +67,40 @@ gradientCard =
         <> fromAnsi "and \ESC[1;32mANSI\ESC[0m from \ESC]8;;https://example.com\ESC\\other tools\ESC]8;;\ESC\\"
     )
 
+languages :: Block
+languages =
+  table
+    ( borderFg purple
+        <> width 46
+        <> headerStyle (bold <> fg pink <> align center)
+        <> cellStyle (\c -> padding 0 1 <> if odd (cellRow c) then fg grey else mempty)
+    )
+    ["Language", "Formal", "Informal"]
+    [ ["Chinese", "您好", "你好"]
+    , ["Japanese", "こんにちは", "やあ"]
+    , ["Arabic", "أهلين", "أهلا"]
+    , ["Russian", "Здравствуйте", "Привет"]
+    , ["Spanish", "Hola", "¿Qué tal?"]
+    ]
+
+outlines :: Block
+outlines =
+  joinHorizontal
+    top
+    [ tree
+        (enumerator roundedTreeEnumerator <> enumeratorStyle (fg purple) <> rootStyle (bold <> fg pink))
+        (Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" [], Node "Debian" []], Node "BSD" []])
+    , render (paddingLeft 6) ""
+    , nestedList
+        ( enumeratorBy (\d -> if d == 0 then roman else bullet)
+            <> enumeratorStyleWith (\p -> fg (if itemDepth p == 0 then pink else purple))
+        )
+        [ Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []]
+        , Node "Nyx" []
+        , Node "Mac" [Node "Ruby Woo" []]
+        ]
+    ]
+
 main :: IO ()
 main = do
   putBlock $
@@ -81,6 +115,8 @@ main = do
     place
       (width 60 <> height 5 <> align center <> valign center <> fg grey <> whitespaceChars "·")
       (render (bold <> fg pink) "placed in the middle")
+  putBlock languages
+  putBlock outlines
   putBlock swatches
   putBlock gradientCard
   putBlock $ render (link "https://github.com/charmbracelet/lipgloss" <> underline) "A hyperlink to lipgloss"

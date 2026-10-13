@@ -16,6 +16,7 @@ module Lipstick
   , HasBorder
   , HasSize
   , HasAlign
+  , HasWrap
 
     -- * Styles
   , Style
@@ -112,13 +113,52 @@ module Lipstick
   , asciiBorder
   , markdownBorder
 
-    -- * Size and alignment
+    -- * Size, alignment and wrapping
   , width
   , height
   , maxWidth
   , maxHeight
   , align
   , valign
+  , noWrap
+
+    -- * Tables
+  , Table
+  , table
+  , TableCell (..)
+  , cellRow
+  , cellColumn
+  , cellStyle
+  , headerStyle
+  , headerRule
+  , columnRules
+  , rowRules
+
+    -- * Lists and trees
+  , Outline
+  , tree
+  , forest
+  , list
+  , nestedList
+  , Tree (..)
+  , Forest
+  , ItemPos (..)
+  , rootStyle
+  , itemStyle
+  , itemStyleWith
+  , enumeratorStyle
+  , enumeratorStyleWith
+  , Enumerator (..)
+  , enumerator
+  , enumeratorBy
+  , treeEnumerator
+  , roundedTreeEnumerator
+  , bullet
+  , dash
+  , asterisk
+  , arabic
+  , alphabet
+  , roman
 
     -- * Colours
   , module Lipstick.Color
@@ -139,13 +179,16 @@ module Lipstick
   , unicodeVersion
   ) where
 
+import Data.Tree (Forest, Tree (..))
 import Lipstick.Ansi
 import Lipstick.Block
 import Lipstick.Border
 import Lipstick.Color
 import Lipstick.Internal.Types
 import Lipstick.Mod
+import Lipstick.Outline
 import Lipstick.Place
 import Lipstick.Style
+import Lipstick.Table
 import Lipstick.Terminal
 import Lipstick.Width (textWidth, unicodeVersion)

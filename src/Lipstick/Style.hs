@@ -27,6 +27,7 @@ data Style = Style
   , styleAlign :: !Align
   , styleTabWidth :: !Int
   , styleInline :: !Bool
+  , styleWrap :: !Bool
   }
   deriving (Eq, Show)
 
@@ -45,8 +46,11 @@ instance HasSize Style where
 instance HasAlign Style where
   overAlign f s = s {styleAlign = f (styleAlign s)}
 
+instance HasWrap Style where
+  overWrap f s = s {styleWrap = f (styleWrap s)}
+
 defStyle :: Style
-defStyle = Style mempty defBox defBorderProps defSize defAlign 4 False
+defStyle = Style mempty defBox defBorderProps defSize defAlign 4 False True
 
 -- | The style a modifier produces from the defaults.
 resolveStyle :: Mod Style -> Style
@@ -67,13 +71,16 @@ inherit :: Mod Style -> Mod Style
 inherit m = Mod (\s -> (appMod m s) {styleBox = styleBox s})
 
 -- | Render text in a box. When a 'width' is set, the text is word-wrapped
--- to fit inside the padding and border.
+-- to fit inside the padding and border, or with 'noWrap' cut short with an
+-- ellipsis.
 render :: Mod Style -> Inline -> Block
 render m inl =
   let s = resolveStyle m
       ls = inlineLines (styleTabWidth s) inl
       wrapped = case contentWidth s of
-        Just w -> concatMap (wrapCells w) ls
+        Just w
+          | styleWrap s -> concatMap (wrapCells w) ls
+          | otherwise -> map (truncateCells w) ls
         Nothing -> ls
    in if styleInline s
         then
@@ -85,15 +92,6 @@ render m inl =
 -- wider than the 'width' allows, the box grows.
 frame :: Mod Style -> Block -> Block
 frame m b = layout (resolveStyle m) (blockCells b)
-
-data Edges = Edges {edgeTop, edgeRight, edgeBottom, edgeLeft :: !Bool}
-
-borderEdges :: BorderProps -> (Border, Edges)
-borderEdges p =
-  let on side = fromMaybe (maybe False (const True) (borderChars p)) (side (borderSides p))
-   in ( fromMaybe normalBorder (borderChars p)
-      , Edges (on sideTop) (on sideRight) (on sideBottom) (on sideLeft)
-      )
 
 -- | Widths of the left and right border columns.
 borderColumns :: BorderProps -> (Int, Int)
