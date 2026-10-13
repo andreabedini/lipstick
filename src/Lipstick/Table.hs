@@ -57,7 +57,7 @@ instance HasBorder Table where
   overBorder f t = t {tableBorder = f (tableBorder t)}
 
 -- | 'width' is the total width of the table: columns shrink (wrapping their
--- text) or grow to fit. 'maxWidth' and 'maxHeight' crop the result.
+-- text) or grow to fit.
 instance HasSize Table where
   overSize f t = t {tableSize = f (tableSize t)}
 
@@ -80,7 +80,7 @@ defTable =
 -- | Style cells by position. Successive 'cellStyle's add up: later ones
 -- win where they set the same thing.
 cellStyle :: (TableCell -> Mod Style) -> Mod Table
-cellStyle f = Mod (\t -> t {tableCellStyle = \c -> tableCellStyle t c <> f c})
+cellStyle f = fieldMod (\t -> t {tableCellStyle = \c -> tableCellStyle t c <> f c})
 
 -- | Style the header cells.
 headerStyle :: Mod Style -> Mod Table
@@ -90,27 +90,27 @@ headerStyle m = cellStyle $ \case
 
 -- | The rule under the header (default on).
 headerRule :: Bool -> Mod Table
-headerRule v = Mod (\t -> t {tableHeaderRule = v})
+headerRule v = fieldMod (\t -> t {tableHeaderRule = v})
 
 -- | Rules between columns (default on).
 columnRules :: Bool -> Mod Table
-columnRules v = Mod (\t -> t {tableColumnRules = v})
+columnRules v = fieldMod (\t -> t {tableColumnRules = v})
 
 -- | Rules between body rows (default off).
 rowRules :: Bool -> Mod Table
-rowRules v = Mod (\t -> t {tableRowRules = v})
+rowRules v = fieldMod (\t -> t {tableRowRules = v})
 
 -- | A table with a header row (none if empty) and body rows. Short rows
 -- are padded with empty cells.
 table :: Mod Table -> [Inline] -> [[Inline]] -> Block
 table m headers rows
   | ncols == 0 = emptyBlock
-  | otherwise = fromCellLines cropped
+  | otherwise = withProps props allLines
   where
-    t = appMod m defTable
+    (t, props) = runMod m defTable
     (chars, edges) = borderEdges (tableBorder t)
     ba = mempty {attrFg = borderFgColor (tableBorder t), attrBg = borderBgColor (tableBorder t)}
-    Size w _ maxW maxH = tableSize t
+    Size w _ = tableSize t
 
     ncols = maximum (0 : length headers : map length rows)
     padRow r = take ncols (r ++ repeat mempty)
@@ -170,8 +170,6 @@ table m headers rows
         ++ body
         ++ [rule (bottomLeftCorner chars) (middleBottom chars) (bottomRightCorner chars) (bottomEdge chars) | edgeBottom edges]
 
-    croppedW = maybe allLines (\n -> map (cropCells n) allLines) maxW
-    cropped = maybe croppedW (`take` croppedW) maxH
 
 -- | Make column widths add up to a target: shrink the widest column one
 -- step at a time (no column goes below 1), or share out the extra space

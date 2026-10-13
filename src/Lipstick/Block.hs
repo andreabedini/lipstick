@@ -24,7 +24,7 @@ import Data.List (transpose)
 import Data.Text (Text)
 import Lipstick.Internal.Block
 import Lipstick.Internal.Types
-import Lipstick.Mod (Mod, appMod)
+import Lipstick.Mod (Mod, Props (..), runMod)
 
 -- | Unstyled text; lines are split on newlines.
 text :: Text -> Block
@@ -34,11 +34,12 @@ text = fromInline . plain
 fromInline :: Inline -> Block
 fromInline = fromCellLines . inlineLines 4
 
--- | Text with attributes, for building 'Inline' text with '<>'.
+-- | Text with attributes, for building 'Inline' text with '<>'. Only the
+-- text attributes of the modifier apply.
 --
 -- > styled bold "Error: " <> "file not found"
-styled :: Mod Attrs -> Text -> Inline
-styled m t = Inline [(appMod m mempty, t)]
+styled :: Mod Inline -> Text -> Inline
+styled m t = Inline [(propAttrs (snd (runMod m mempty)), t)]
 
 -- | Place blocks side by side. The position aligns shorter blocks
 -- vertically ('top', 'center', 'bottom').

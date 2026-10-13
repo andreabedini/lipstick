@@ -82,12 +82,12 @@ listDefaults = treeDefaults {outEnumerator = const bullet}
 -- | A tree: the root, then its children.
 tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
-  let o = appMod m treeDefaults
-   in fromCellLines (blockCells (frame (outRootStyle o) root) ++ items o 0 kids)
+  let (o, props) = runMod m treeDefaults
+   in withProps props (blockCells (frame (outRootStyle o) root) ++ items o 0 kids)
 
 -- | Trees without a common root, with tree branches.
 forest :: Mod Outline -> Forest Block -> Block
-forest m = fromCellLines . items (appMod m treeDefaults) 0
+forest m kids = let (o, props) = runMod m treeDefaults in withProps props (items o 0 kids)
 
 -- | A list of items, with bullets.
 list :: Mod Outline -> [Block] -> Block
@@ -95,7 +95,7 @@ list m = nestedList m . map (`Node` [])
 
 -- | A list whose items can have nested items, with bullets.
 nestedList :: Mod Outline -> Forest Block -> Block
-nestedList m = fromCellLines . items (appMod m listDefaults) 0
+nestedList m kids = let (o, props) = runMod m listDefaults in withProps props (items o 0 kids)
 
 items :: Outline -> Int -> Forest Block -> [[Cell]]
 items o depth kids = concat (zipWith item [0 ..] kids)
@@ -121,7 +121,7 @@ items o depth kids = concat (zipWith item [0 ..] kids)
 
 -- | Style the root of a tree.
 rootStyle :: Mod Style -> Mod Outline
-rootStyle m = Mod (\o -> o {outRootStyle = outRootStyle o <> m})
+rootStyle m = fieldMod (\o -> o {outRootStyle = outRootStyle o <> m})
 
 -- | Style every item.
 itemStyle :: Mod Style -> Mod Outline
@@ -129,7 +129,7 @@ itemStyle m = itemStyleWith (const m)
 
 -- | Style items by position. Successive item styles add up.
 itemStyleWith :: (ItemPos -> Mod Style) -> Mod Outline
-itemStyleWith f = Mod (\o -> o {outItemStyle = \p -> outItemStyle o p <> f p})
+itemStyleWith f = fieldMod (\o -> o {outItemStyle = \p -> outItemStyle o p <> f p})
 
 -- | Style every enumerator (and the indentation below it).
 enumeratorStyle :: Mod Style -> Mod Outline
@@ -137,7 +137,7 @@ enumeratorStyle m = enumeratorStyleWith (const m)
 
 -- | Style enumerators by position. Successive enumerator styles add up.
 enumeratorStyleWith :: (ItemPos -> Mod Style) -> Mod Outline
-enumeratorStyleWith f = Mod (\o -> o {outEnumStyle = \p -> outEnumStyle o p <> f p})
+enumeratorStyleWith f = fieldMod (\o -> o {outEnumStyle = \p -> outEnumStyle o p <> f p})
 
 -- Enumerators -----------------------------------------------------------------
 
@@ -147,7 +147,7 @@ enumerator e = enumeratorBy (const e)
 
 -- | Choose the enumerator by depth (0 for the top level).
 enumeratorBy :: (Int -> Enumerator) -> Mod Outline
-enumeratorBy f = Mod (\o -> o {outEnumerator = f})
+enumeratorBy f = fieldMod (\o -> o {outEnumerator = f})
 
 -- | @├── @ and @└── @, with @│@ continuing the branch.
 treeEnumerator :: Enumerator

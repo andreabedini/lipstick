@@ -30,6 +30,7 @@ main = do
       , tableTests
       , outlineTests
       , layerTests
+      , commonPropsTests
       , renderTests
       , layoutTests
       , ansiTests
@@ -360,6 +361,54 @@ layerTests =
     ]
   where
     withWidth' ls w = [l <> T.replicate (w - textWidth l) " " | l <- ls]
+
+-- | Text attributes and cropping are common to every thing.
+commonPropsTests :: TestTree
+commonPropsTests =
+  testGroup
+    "common properties"
+    [ testCase "style attributes do not colour the border" $
+        toAnsi defaultRenderEnv (render (fg red <> border asciiBorder <> borderTop False <> borderBottom False) "x")
+          @?= "|\ESC[0;31mx\ESC[0m|"
+    , testCase "style background does not fill margins" $
+        toAnsi defaultRenderEnv (render (bg red <> marginLeft 1) "x") @?= " \ESC[0;41mx\ESC[0m"
+    , testCase "table attributes are the base for cells and borders" $
+        toAnsi defaultRenderEnv (table (bold <> border asciiBorder <> borderTop False <> borderBottom False) [] [["x"]])
+          @?= "\ESC[0;1m|x|\ESC[0m"
+    , testCase "cell styles and borderFg override the table's" $
+        toAnsi defaultRenderEnv (table (fg red <> borderFg blue <> cellStyle (const (fg green)) <> border asciiBorder <> borderTop False <> borderBottom False) [] [["x"]])
+          @?= "\ESC[0;34m|\ESC[0;32mx\ESC[0;34m|\ESC[0m"
+    , testCase "outline attributes are the base for items and enumerators" $
+        toAnsi defaultRenderEnv (list (fg red <> itemStyle bold) ["a"])
+          @?= "\ESC[0;31m• \ESC[0;1;31ma\ESC[0m"
+    , testCase "layer attributes are the base for its block" $
+        toAnsi defaultRenderEnv (compose [layer (bg red) (text "a" `besides` render (bg blue) "b")])
+          @?= "\ESC[0;41ma\ESC[0;44mb\ESC[0m"
+    , testCase "a layer with a background is not transparent" $
+        plainLines (compose [layer mempty "ab", layer (transparent <> bg red) " "]) @?= [" b"]
+    , testCase "place attributes colour the whitespace and the block" $
+        toAnsi defaultRenderEnv (place (width 3 <> align center <> bg red) (text "x"))
+          @?= "\ESC[0;41m x \ESC[0m"
+    , testCase "the placed block's own attributes win" $
+        toAnsi defaultRenderEnv (place (width 2 <> bg red) (render (bg blue) "x"))
+          @?= "\ESC[0;44mx\ESC[0;41m \ESC[0m"
+    , testCase "maxWidth crops tables, outlines, places and layers" $ do
+        blockWidth (table (maxWidth 3) ["abcdef"] []) @?= 3
+        blockWidth (tree (maxWidth 3) (Node "root" [Node "child" []])) @?= 3
+        blockWidth (place (width 10 <> maxWidth 4) "x") @?= 4
+        blockWidth (compose [layer (maxWidth 2) "abcd"]) @?= 2
+    , testCase "maxHeight crops outlines" $
+        blockHeight (list (maxHeight 2) ["a", "b", "c"]) @?= 2
+    , testCase "the same modifier works on every thing" $ do
+        let base :: Mod f
+            base = fg red <> bold
+        renderPlain (render base "x") @?= "x"
+        renderPlain (table base [] [["x"]]) @?= "╭─╮\n│x│\n╰─╯"
+        renderPlain (list base ["x"]) @?= "• x"
+        renderPlain (place base "x") @?= "x"
+    ]
+  where
+    besides a b = hcat [a, b]
 
 renderTests :: TestTree
 renderTests =

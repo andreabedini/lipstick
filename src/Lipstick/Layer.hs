@@ -30,7 +30,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Block
-import Lipstick.Mod (Mod (..), appMod)
+import Lipstick.Mod (Mod, fieldMod, runMod, withProps)
 
 data Layer = Layer
   { layerX :: !Int
@@ -42,31 +42,34 @@ data Layer = Layer
   , layerBlock :: Block
   }
 
--- | A layer showing a block, at the origin unless moved with 'offset'.
+-- | A layer showing a block, at the origin unless moved with 'offset'. The
+-- layer's text attributes are the base for the block.
 layer :: Mod Layer -> Block -> Layer
-layer m b = appMod m (Layer 0 0 0 Nothing False [] b)
+layer m b =
+  let (l, props) = runMod m (Layer 0 0 0 Nothing False [] b)
+   in l {layerBlock = withProps props (blockCells (layerBlock l))}
 
 -- | Move the layer right and down (relative to its parent, for sublayers).
 -- Parts moved off the top or left of the canvas are cut off.
 offset :: Int -> Int -> Mod Layer
-offset x y = Mod (\l -> l {layerX = x, layerY = y})
+offset x y = fieldMod (\l -> l {layerX = x, layerY = y})
 
 -- | Layers with a higher z-index are drawn on top (relative to the parent,
 -- for sublayers).
 zIndex :: Int -> Mod Layer
-zIndex z = Mod (\l -> l {layerZ = z})
+zIndex z = fieldMod (\l -> l {layerZ = z})
 
 -- | Name the layer, for 'layerAt'.
 layerId :: Text -> Mod Layer
-layerId t = Mod (\l -> l {layerName = Just t})
+layerId t = fieldMod (\l -> l {layerName = Just t})
 
 -- | Let unstyled spaces show what is below them.
 transparent :: Mod Layer
-transparent = Mod (\l -> l {layerTransparent = True})
+transparent = fieldMod (\l -> l {layerTransparent = True})
 
 -- | Layers positioned relative to this one.
 sublayers :: [Layer] -> Mod Layer
-sublayers ls = Mod (\l -> l {layerChildren = layerChildren l ++ ls})
+sublayers ls = fieldMod (\l -> l {layerChildren = layerChildren l ++ ls})
 
 -- | Absolute layers, in drawing order.
 flatten :: [Layer] -> [Layer]

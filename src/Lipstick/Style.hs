@@ -19,9 +19,11 @@ import Lipstick.Internal.Types
 import Lipstick.Mod
 import Lipstick.Width (textWidth)
 
+-- | The fields of a style. Its text attributes are in the common
+-- 'Props': they apply to the content and padding, not to the border or
+-- margins, which have their own colours ('borderFg', 'marginBg').
 data Style = Style
-  { styleAttrs :: !Attrs
-  , styleBox :: !Box
+  { styleBox :: !Box
   , styleBorder :: !BorderProps
   , styleSize :: !Size
   , styleAlign :: !Align
@@ -30,9 +32,6 @@ data Style = Style
   , styleWrap :: !Bool
   }
   deriving (Eq, Show)
-
-instance HasAttrs Style where
-  overAttrs f s = s {styleAttrs = f (styleAttrs s)}
 
 instance HasBox Style where
   overBox f s = s {styleBox = f (styleBox s)}
@@ -50,32 +49,32 @@ instance HasWrap Style where
   overWrap f s = s {styleWrap = f (styleWrap s)}
 
 defStyle :: Style
-defStyle = Style mempty defBox defBorderProps defSize defAlign 4 False True
+defStyle = Style defBox defBorderProps defSize defAlign 4 False True
 
--- | The style a modifier produces from the defaults.
-resolveStyle :: Mod Style -> Style
-resolveStyle m = appMod m defStyle
+-- | The style and properties a modifier produces from the defaults.
+resolveStyle :: Mod Style -> (Style, Props)
+resolveStyle m = runMod m defStyle
 
 -- | How many spaces a tab becomes (default 4).
 tabWidth :: Int -> Mod Style
-tabWidth n = Mod (\s -> s {styleTabWidth = max 0 n})
+tabWidth n = fieldMod (\s -> s {styleTabWidth = max 0 n})
 
 -- | Render on a single line: newlines are removed, and padding, margins,
 -- border, size and alignment are ignored, except 'maxWidth'.
 inline :: Mod Style
-inline = Mod (\s -> s {styleInline = True})
+inline = fieldMod (\s -> s {styleInline = True})
 
 -- | Apply a parent style, keeping the padding and margins already set:
 -- lipgloss's @Inherit@.
 inherit :: Mod Style -> Mod Style
-inherit m = Mod (\s -> (appMod m s) {styleBox = styleBox s})
+inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
 
 -- | Render text in a box. When a 'width' is set, the text is word-wrapped
 -- to fit inside the padding and border, or with 'noWrap' cut short with an
 -- ellipsis.
 render :: Mod Style -> Inline -> Block
 render m inl =
-  let s = resolveStyle m
+  let (s, p) = resolveStyle m
       ls = inlineLines (styleTabWidth s) inl
       wrapped = case contentWidth s of
         Just w
@@ -84,14 +83,13 @@ render m inl =
         Nothing -> ls
    in if styleInline s
         then
-          let oneLine = overCellAttrs (styleAttrs s <>) [concat ls]
-           in fromCellLines (maybe oneLine (\n -> map (cropCells n) oneLine) (sizeMaxWidth (styleSize s)))
-        else layout s wrapped
+          cropToProps p (overCellAttrs (propAttrs p <>) [concat ls])
+        else layout s p wrapped
 
 -- | Put an existing block in a box. The block is not re-wrapped: if it is
 -- wider than the 'width' allows, the box grows.
 frame :: Mod Style -> Block -> Block
-frame m b = layout (resolveStyle m) (blockCells b)
+frame m b = let (s, p) = resolveStyle m in layout s p (blockCells b)
 
 -- | Widths of the left and right border columns.
 borderColumns :: BorderProps -> (Int, Int)
@@ -107,12 +105,12 @@ contentWidth s = do
       (bl, br) = borderColumns (styleBorder s)
   pure (max 0 (w - pl - pr - bl - br))
 
-layout :: Style -> [[Cell]] -> Block
-layout s content0 =
-  let attrs = styleAttrs s
+layout :: Style -> Props -> [[Cell]] -> Block
+layout s props content0 =
+  let attrs = propAttrs props
       fill = fillAttrs attrs
       Box (Sides pt pr pb pl) (Sides mt mr mb ml) mbg pch mch = styleBox s
-      Size _ hgt maxW maxH = styleSize s
+      Size _ hgt = styleSize s
       Align ah av = styleAlign s
       bp = styleBorder s
       (chars, edges) = borderEdges bp
@@ -165,10 +163,7 @@ layout s content0 =
           ++ [marginCells ml ++ l ++ marginCells mr | l <- bordered]
           ++ replicate mb (marginCells outerW)
 
-      -- Cropping.
-      croppedW = maybe margined (\n -> map (cropCells n) margined) maxW
-      cropped = maybe croppedW (`take` croppedW) maxH
-   in fromCellLines cropped
+   in cropToProps props margined
 
 -- | Recolour the border cells with a gradient, clockwise from the top-left.
 -- The rows are the bordered box; @nl@ and @nr@ are the number of cells in

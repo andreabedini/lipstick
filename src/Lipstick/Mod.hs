@@ -1,8 +1,9 @@
 -- | Modifiers, in the style of optparse-applicative's builder.
 --
 -- A @'Mod' f@ is a change to a thing @f@ (a 'Lipstick.Style.Style', a
--- 'Lipstick.Place.Place', plain 'Attrs', …). Modifiers form a monoid in
--- which the later setting wins, so styles are built and extended with '<>':
+-- 'Lipstick.Table.Table', a 'Lipstick.Place.Place', …). Modifiers form a
+-- monoid in which the later setting wins, so styles are built and extended
+-- with '<>':
 --
 -- > card :: Mod Style
 -- > card = bold <> fg "#FAFAFA" <> bg "#7D56F4" <> padding 1 2
@@ -10,15 +11,31 @@
 -- > warning :: Mod Style
 -- > warning = card <> bg "#F25D94"
 --
--- Each modifier works on every thing that has the component it changes,
--- which is expressed by the classes 'HasAttrs', 'HasBox', 'HasBorder',
--- 'HasSize' and 'HasAlign'.
+-- Like optparse-applicative's @Mod@, a modifier has two parts:
+--
+-- * a change to properties every thing has ('Props'): text attributes and
+--   the 'maxWidth' / 'maxHeight' crop. Modifiers of these, such as 'fg' or
+--   'bold', work on any thing. Each thing's text attributes are the base
+--   for everything it draws, overridden by anything more specific inside it
+--   (a cell style, an item style, the attributes of a placed block).
+--
+-- * a change to the thing's own fields. Modifiers shared by some things go
+--   through the classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and
+--   'HasWrap'.
 module Lipstick.Mod
   ( Mod (..)
+  , fieldMod
+  , propMod
+  , runMod
   , appMod
 
+    -- * Properties of every thing
+  , Props (..)
+  , defProps
+  , withProps
+  , cropToProps
+
     -- * Components
-  , HasAttrs (..)
   , HasBox (..)
   , HasBorder (..)
   , HasSize (..)
@@ -100,27 +117,58 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Lipstick.Border (Border, normalBorder)
 import Lipstick.Color (Color)
+import Lipstick.Internal.Block
 import Lipstick.Internal.Types
 
--- | A modification of a thing @f@. '<>' applies the left modifier first, so
+-- | A modification of a thing @f@: of its own fields, and of the
+-- properties every thing has. '<>' applies the left modifier first, so
 -- settings on the right win.
-newtype Mod f = Mod (f -> f)
+data Mod f = Mod (f -> f) (Props -> Props)
 
 instance Semigroup (Mod f) where
-  Mod g <> Mod h = Mod (h . g)
+  Mod f1 g1 <> Mod f2 g2 = Mod (f2 . f1) (g2 . g1)
 
 instance Monoid (Mod f) where
-  mempty = Mod id
+  mempty = Mod id id
 
+-- | A modifier of the thing's own fields.
+fieldMod :: (f -> f) -> Mod f
+fieldMod f = Mod f id
+
+-- | A modifier of the properties every thing has.
+propMod :: (Props -> Props) -> Mod f
+propMod = Mod id
+
+-- | Apply a modifier to a thing's defaults.
+runMod :: Mod f -> f -> (f, Props)
+runMod (Mod f g) x = (f x, g defProps)
+
+-- | Apply only the field part of a modifier.
 appMod :: Mod f -> f -> f
-appMod (Mod g) = g
+appMod (Mod f _) = f
 
--- | Things with text attributes.
-class HasAttrs f where
-  overAttrs :: (Attrs -> Attrs) -> f -> f
+-- | Properties every thing has.
+data Props = Props
+  { propAttrs :: !Attrs
+  -- ^ base text attributes for everything the thing draws
+  , propMaxWidth :: !(Maybe Int)
+  , propMaxHeight :: !(Maybe Int)
+  }
+  deriving (Eq, Show)
 
-instance HasAttrs Attrs where
-  overAttrs = id
+defProps :: Props
+defProps = Props mempty Nothing Nothing
+
+-- | What most builders do with the properties: lay the attributes under
+-- everything, then crop.
+withProps :: Props -> [[Cell]] -> Block
+withProps p = cropToProps p . overCellAttrs (propAttrs p <>)
+
+-- | Crop lines to 'maxWidth' and 'maxHeight'.
+cropToProps :: Props -> [[Cell]] -> Block
+cropToProps p ls =
+  let croppedW = maybe ls (\n -> map (cropCells n) ls) (propMaxWidth p)
+   in fromCellLines (maybe croppedW (`take` croppedW) (propMaxHeight p))
 
 -- | Things with padding and margins.
 class HasBox f where
@@ -193,13 +241,11 @@ borderEdges p =
 data Size = Size
   { sizeWidth :: !(Maybe Int)
   , sizeHeight :: !(Maybe Int)
-  , sizeMaxWidth :: !(Maybe Int)
-  , sizeMaxHeight :: !(Maybe Int)
   }
   deriving (Eq, Show)
 
 defSize :: Size
-defSize = Size Nothing Nothing Nothing Nothing
+defSize = Size Nothing Nothing
 
 data Align = Align
   { alignH :: !Position
@@ -212,10 +258,10 @@ defAlign = Align left top
 
 -- Text attributes -------------------------------------------------------------
 
-attrsMod :: HasAttrs f => (Attrs -> Attrs) -> Mod f
-attrsMod = Mod . overAttrs
+attrsMod :: (Attrs -> Attrs) -> Mod f
+attrsMod g = propMod (\p -> p {propAttrs = g (propAttrs p)})
 
-bold, faint, italic, blink, reverseVideo, strikethrough :: HasAttrs f => Mod f
+bold, faint, italic, blink, reverseVideo, strikethrough :: Mod f
 bold = flag Bold True
 faint = flag Faint True
 italic = flag Italic True
@@ -225,43 +271,43 @@ strikethrough = flag Strikethrough True
 
 -- | Set a flag explicitly; @flag Bold False@ turns off bold inherited from
 -- an enclosing style.
-flag :: HasAttrs f => Flag -> Bool -> Mod f
+flag :: Flag -> Bool -> Mod f
 flag f v = attrsMod (setFlag f (Just v))
 
 -- | Forget a flag, so an enclosing style's setting shows through.
-unsetFlag :: HasAttrs f => Flag -> Mod f
+unsetFlag :: Flag -> Mod f
 unsetFlag f = attrsMod (setFlag f Nothing)
 
-underline :: HasAttrs f => Mod f
+underline :: Mod f
 underline = underlineStyle SingleUnderline
 
 -- | Curly, dotted and dashed underlines need a true-colour terminal; on
 -- other profiles they are shown as a single underline.
-underlineStyle :: HasAttrs f => Underline -> Mod f
+underlineStyle :: Underline -> Mod f
 underlineStyle u = attrsMod (\a -> a {attrUnderline = Just u})
 
-underlineColor :: HasAttrs f => Color -> Mod f
+underlineColor :: Color -> Mod f
 underlineColor c = attrsMod (\a -> a {attrUnderlineColor = Just c})
 
-fg, bg :: HasAttrs f => Color -> Mod f
+fg, bg :: Color -> Mod f
 fg c = attrsMod (\a -> a {attrFg = Just c})
 bg c = attrsMod (\a -> a {attrBg = Just c})
 
-unsetFg, unsetBg :: HasAttrs f => Mod f
+unsetFg, unsetBg :: Mod f
 unsetFg = attrsMod (\a -> a {attrFg = Nothing})
 unsetBg = attrsMod (\a -> a {attrBg = Nothing})
 
 -- | Make the text a hyperlink (OSC 8).
-link :: HasAttrs f => Text -> Mod f
+link :: Text -> Mod f
 link url = attrsMod (\a -> a {attrLink = Just url})
 
 -- Padding and margins ---------------------------------------------------------
 
 paddingMod :: HasBox f => (Sides Int -> Sides Int) -> Mod f
-paddingMod g = Mod (overBox (\b -> b {boxPadding = g (boxPadding b)}))
+paddingMod g = fieldMod (overBox (\b -> b {boxPadding = g (boxPadding b)}))
 
 marginMod :: HasBox f => (Sides Int -> Sides Int) -> Mod f
-marginMod g = Mod (overBox (\b -> b {boxMargin = g (boxMargin b)}))
+marginMod g = fieldMod (overBox (\b -> b {boxMargin = g (boxMargin b)}))
 
 -- | @padding vertical horizontal@
 padding :: HasBox f => Int -> Int -> Mod f
@@ -291,20 +337,20 @@ marginLeft n = marginMod (\s -> s {sideLeft = n})
 
 -- | Background colour of the margins.
 marginBg :: HasBox f => Color -> Mod f
-marginBg c = Mod (overBox (\b -> b {boxMarginBg = Just c}))
+marginBg c = fieldMod (overBox (\b -> b {boxMarginBg = Just c}))
 
 -- | The character padding is filled with (default a space).
 paddingChar :: HasBox f => Char -> Mod f
-paddingChar c = Mod (overBox (\b -> b {boxPaddingChar = c}))
+paddingChar c = fieldMod (overBox (\b -> b {boxPaddingChar = c}))
 
 -- | The character margins are filled with (default a space).
 marginChar :: HasBox f => Char -> Mod f
-marginChar c = Mod (overBox (\b -> b {boxMarginChar = c}))
+marginChar c = fieldMod (overBox (\b -> b {boxMarginChar = c}))
 
 -- Borders ---------------------------------------------------------------------
 
 borderMod :: HasBorder f => (BorderProps -> BorderProps) -> Mod f
-borderMod = Mod . overBorder
+borderMod = fieldMod . overBorder
 
 -- | Draw a border with these characters, on all sides not switched off.
 border :: HasBorder f => Border -> Mod f
@@ -331,7 +377,7 @@ borderSide g = borderMod (\p -> p {borderSides = g (borderSides p)})
 -- Size ------------------------------------------------------------------------
 
 sizeMod :: HasSize f => (Size -> Size) -> Mod f
-sizeMod = Mod . overSize
+sizeMod = fieldMod . overSize
 
 -- | Total width, including padding and border.
 width :: HasSize f => Int -> Mod f
@@ -341,26 +387,28 @@ width n = sizeMod (\s -> s {sizeWidth = Just n})
 height :: HasSize f => Int -> Mod f
 height n = sizeMod (\s -> s {sizeHeight = Just n})
 
--- | Crop the final result, margins included, to at most this many columns.
-maxWidth :: HasSize f => Int -> Mod f
-maxWidth n = sizeMod (\s -> s {sizeMaxWidth = Just n})
+-- | Crop the final result (for a style, margins included) to at most this
+-- many columns.
+maxWidth :: Int -> Mod f
+maxWidth n = propMod (\p -> p {propMaxWidth = Just n})
 
--- | Crop the final result, margins included, to at most this many rows.
-maxHeight :: HasSize f => Int -> Mod f
-maxHeight n = sizeMod (\s -> s {sizeMaxHeight = Just n})
+-- | Crop the final result (for a style, margins included) to at most this
+-- many rows.
+maxHeight :: Int -> Mod f
+maxHeight n = propMod (\p -> p {propMaxHeight = Just n})
 
 -- Alignment -------------------------------------------------------------------
 
 -- | Horizontal alignment.
 align :: HasAlign f => Position -> Mod f
-align p = Mod (overAlign (\a -> a {alignH = p}))
+align p = fieldMod (overAlign (\a -> a {alignH = p}))
 
 -- | Vertical alignment.
 valign :: HasAlign f => Position -> Mod f
-valign p = Mod (overAlign (\a -> a {alignV = p}))
+valign p = fieldMod (overAlign (\a -> a {alignV = p}))
 
 -- Wrapping --------------------------------------------------------------------
 
 -- | Cut lines that are too long with an ellipsis instead of wrapping them.
 noWrap :: HasWrap f => Mod f
-noWrap = Mod (overWrap (const False))
+noWrap = fieldMod (overWrap (const False))

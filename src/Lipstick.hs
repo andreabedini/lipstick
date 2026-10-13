@@ -11,7 +11,6 @@
 module Lipstick
   ( -- * Modifiers
     Mod
-  , HasAttrs
   , HasBox
   , HasBorder
   , HasSize
