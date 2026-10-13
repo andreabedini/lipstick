@@ -351,6 +351,12 @@ layerTests =
         toAnsi defaultRenderEnv (overlay 1 0 (render bold "x") "ab") @?= "a\ESC[0;1mx\ESC[0m"
     , testCase "zero-width clusters do not take a column" $
         plainLines (overlay 0 0 "a\x200B\&b" "....") @?= ["ab.."]
+    , testCase "layerHit and findLayer report bounds" $ do
+        let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 0 <> sublayers [layer (offset 1 1 <> layerId "btn") "ok"]) "x"]
+        layerHit 2 1 ls @?= Just ("btn", Rect 2 1 2 1)
+        layerHit 0 1 ls @?= Just ("bg", Rect 0 0 4 2)
+        findLayer "btn" ls @?= Just (Rect 2 1 2 1)
+        findLayer "nope" ls @?= Nothing
     , testCase "layerAt finds the topmost named layer" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 1 <> layerId "btn") "ok", layer (offset 0 0) "x"]
         layerAt 1 1 ls @?= Just "btn"

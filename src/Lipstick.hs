@@ -250,6 +250,9 @@ module Lipstick
   , compose
   , overlay
   , layerAt
+  , layerHit
+  , findLayer
+  , Rect (..)
 
     -- * Measuring text
   , textWidth

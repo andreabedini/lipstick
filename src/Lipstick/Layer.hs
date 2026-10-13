@@ -21,6 +21,9 @@ module Lipstick.Layer
   , compose
   , overlay
   , layerAt
+  , layerHit
+  , findLayer
+  , Rect (..)
   ) where
 
 import Data.List (sortOn)
@@ -162,15 +165,35 @@ paintLayer canvas l = foldl paintRow canvas (zip [layerY l ..] (blockCells (laye
     spaceLike cell = Cell (cellAttrs cell) (T.singleton ' ') 1
     isBlank cell = cellText cell == T.singleton ' ' && cellAttrs cell == mempty
 
+-- | Where a layer is drawn, in canvas columns and rows.
+data Rect = Rect
+  { rectX :: !Int
+  , rectY :: !Int
+  , rectWidth :: !Int
+  , rectHeight :: !Int
+  }
+  deriving (Eq, Show)
+
+bounds :: Layer -> Rect
+bounds l = Rect (layerX l) (layerY l) (blockWidth (layerBlock l)) (blockHeight (layerBlock l))
+
+contains :: Int -> Int -> Rect -> Bool
+contains x y (Rect rx ry w h) = x >= rx && x < rx + w && y >= ry && y < ry + h
+
 -- | The topmost named layer covering a column and row, for mouse handling.
 layerAt :: Int -> Int -> [Layer] -> Maybe Text
-layerAt x y layers =
+layerAt x y = fmap fst . layerHit x y
+
+-- | Like 'layerAt', with where the layer is drawn.
+layerHit :: Int -> Int -> [Layer] -> Maybe (Text, Rect)
+layerHit x y layers =
   listToMaybe
-    [ name
+    [ (name, bounds l)
     | l <- reverse (flatten layers)
     , Just name <- [layerName l]
-    , x >= layerX l
-    , x < layerX l + blockWidth (layerBlock l)
-    , y >= layerY l
-    , y < layerY l + blockHeight (layerBlock l)
+    , contains x y (bounds l)
     ]
+
+-- | Where the layer with an id is drawn (the topmost, if several share it).
+findLayer :: Text -> [Layer] -> Maybe Rect
+findLayer name layers = listToMaybe [bounds l | l <- reverse (flatten layers), layerName l == Just name]
