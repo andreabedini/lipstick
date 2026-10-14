@@ -155,7 +155,15 @@ blendTests :: TestTree
 blendTests =
   testGroup
     "colour manipulation"
-    [ testCase "blend endpoints" $
+    [ testCase "mix keeps the variants of complete colours" $
+        mix 0.5 (complete (rgb 255 0 0) (ansi256 196) red) blue
+          @?= complete (mix 0.5 (rgb 255 0 0) blue) (mix 0.5 (ansi256 196) blue) (mix 0.5 red blue)
+    , testCase "mix keeps both kinds of adaptive colour" $
+        mix 0.25 (lightDark white black) (complete red green blue)
+          @?= lightDark
+            (complete (mix 0.25 white red) (mix 0.25 white green) (mix 0.25 white blue))
+            (complete (mix 0.25 black red) (mix 0.25 black green) (mix 0.25 black blue))
+    , testCase "blend endpoints" $
         blend 3 ["#ff0000", "#0000ff"] @?= ["#ff0000", RGB 140 83 162, "#0000ff"]
     , testCase "blend through three stops" $ do
         let cs = blend 5 ["#000000", "#ffffff", "#000000"]

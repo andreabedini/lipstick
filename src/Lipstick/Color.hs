@@ -265,16 +265,40 @@ complementary :: Color -> Color
 complementary = mapOkLab (\(OkLab l a b) -> OkLab l (negate a) (negate b))
 
 -- | @mix t c1 c2@ is @c1@ at 0, @c2@ at 1, and in between otherwise.
+-- Adaptive colours are mixed variant by variant: for each background and
+-- each profile, with the matching variant of the other colour.
 mix :: Double -> Color -> Color -> Color
-mix t c1 c2 = case (c1, c2) of
-  (LightDark l1 d1, _) -> LightDark (mix t l1 (variant False c2)) (mix t d1 (variant True c2))
-  (_, LightDark l2 d2) -> LightDark (mix t (variant False c1) l2) (mix t (variant True c1) d2)
-  _ ->
-    fromOkLab (lerpOkLab (clamp01 t) (toOkLab c2) (toOkLab c1))
+mix t c1 c2
+  | adaptive = LightDark (forBackground False) (forBackground True)
+  | otherwise = forBackground True
   where
-    variant dark = \case
-      LightDark l d -> variant dark (if dark then d else l)
-      c -> c
+    adaptive = hasLightDark c1 || hasLightDark c2
+    forBackground dark
+      | hasComplete c1 || hasComplete c2 =
+          Complete (at dark TrueColor) (at dark ANSI256) (at dark ANSI16)
+      | otherwise = at dark TrueColor
+    at dark p = fromOkLab (lerpOkLab (clamp01 t) (toOkLab (variant dark p c2)) (toOkLab (variant dark p c1)))
+
+-- | The concrete colour an adaptive one stands for on a background and
+-- profile.
+variant :: Bool -> ColorProfile -> Color -> Color
+variant dark p = \case
+  LightDark l d -> variant dark p (if dark then d else l)
+  Complete tc c256 c16 -> variant dark p $ case p of
+    TrueColor -> tc
+    ANSI256 -> c256
+    _ -> c16
+  c -> c
+
+hasLightDark, hasComplete :: Color -> Bool
+hasLightDark = \case
+  LightDark _ _ -> True
+  Complete a b c -> any hasLightDark [a, b, c]
+  _ -> False
+hasComplete = \case
+  Complete _ _ _ -> True
+  LightDark a b -> any hasComplete [a, b]
+  _ -> False
 
 -- | @blend n stops@ is a gradient of @n@ colours going evenly through the
 -- stops, starting at the first and ending at the last.
