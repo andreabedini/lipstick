@@ -6,10 +6,13 @@ import Data.Char (chr)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
+import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
 import Lipstick.Width (clusters)
 import Numeric (readHex)
+import System.Directory (getTemporaryDirectory, removeFile)
+import System.IO (hClose, hSetEncoding, mkTextEncoding, openTempFile)
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -691,6 +694,16 @@ ansiTests =
     , testCase "hyperlink" $
         toAnsi defaultRenderEnv (render (link "https://x.y") "a")
           @?= "\ESC]8;;https://x.y\ESC\\a\ESC]8;;\ESC\\"
+    , testCase "output is UTF-8 whatever the handle's encoding" $ do
+        dir <- getTemporaryDirectory
+        (path, h) <- openTempFile dir "lipstick.txt"
+        hSetEncoding h =<< mkTextEncoding "ASCII"
+        let b = render (border roundedBorder) "héllo"
+        hPutBlockWith (RenderEnv NoTTY True) h b
+        hClose h
+        out <- Utf8.readFile path
+        removeFile path
+        out @?= renderPlain b <> "\n"
     , testCase "light/dark resolved at output" $ do
         let b = render (fg (lightDark "1" "2")) "a"
         toAnsi (RenderEnv TrueColor True) b @?= "\ESC[0;32ma\ESC[0m"

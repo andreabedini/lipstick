@@ -22,7 +22,7 @@ import Data.Char (isDigit)
 import Data.Colour.SRGB (RGB (..))
 import Data.List (isInfixOf, isPrefixOf)
 import Data.Maybe (fromMaybe)
-import Data.Text.IO qualified as T
+import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick.Ansi
 import Lipstick.Color (ColorProfile (..))
 import Lipstick.Internal.Block (Block)
@@ -44,8 +44,12 @@ hPutBlock h b = do
 
 -- | Print a block to a handle, followed by a newline, for a known
 -- environment.
+--
+-- The output is always UTF-8, whatever the handle's encoding: terminals
+-- expect it, and a locale such as @C@ (common in containers and cron jobs)
+-- would otherwise make the handle reject box-drawing characters.
 hPutBlockWith :: RenderEnv -> Handle -> Block -> IO ()
-hPutBlockWith env h b = T.hPutStrLn h (toAnsi env b)
+hPutBlockWith env h b = Utf8.hPutStrLn h (toAnsi env b)
 
 -- | The colour profile of a handle, and whether the background is dark
 -- according to @COLORFGBG@ (dark if it is not set). Does not talk to the

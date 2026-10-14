@@ -51,7 +51,7 @@ library
     build-depends:
         base ^>=4.21.0.0,
         array ^>=0.5,
-        text ^>=2.1,
+        text >=2.1.2 && <2.2,
         ansi-terminal ^>=1.1,
         colour ^>=2.3,
         containers >=0.6 && <0.8
@@ -88,6 +88,7 @@ test-suite lipstick-test
         base,
         text,
         lipstick,
+        directory,
         tasty ^>=1.5,
         tasty-hunit ^>=0.10,
         tasty-quickcheck ^>=0.11,
