@@ -7,9 +7,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which moves to Ubuntu 26.04 from
+    # 2026-10-19 (actions/runner-images#14748). The image is also in the cache
+    # key, so a cabal store built on one image is not restored on another.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: haskell-actions/setup@v2
         id: setup
@@ -22,11 +25,11 @@ jobs:
           cabal update
           cabal build all --enable-tests --dry-run
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
-          key: cabal-${{ runner.os }}-ghc-9.12.2-${{ hashFiles('dist-newstyle/cache/plan.json') }}
-          restore-keys: cabal-${{ runner.os }}-ghc-9.12.2-
+          key: cabal-ubuntu-24.04-ghc-9.12.2-${{ hashFiles('dist-newstyle/cache/plan.json') }}
+          restore-keys: cabal-ubuntu-24.04-ghc-9.12.2-
 
       - name: Build
         run: cabal build all --enable-tests
