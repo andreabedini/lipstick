@@ -151,8 +151,10 @@ table
 
 ![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
 
-A table fits the width it is laid out in: columns shrink, widest first,
-wrapping their cells, and with `fillWidth` they grow to fill it. With a
+A table fits the width it is laid out in: columns shrink, wrapping their
+cells, widest first but without breaking a word while another column can
+still wrap (headers are cut short instead), and with `fillWidth` they grow
+to fill it. With a
 `width`, columns shrink or grow to fit that instead; `fitContent` makes the
 width a maximum. With a `height`, rows that
 do not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
@@ -260,7 +262,8 @@ styled spans and produces escape sequences only when printing. Widths are
 exact, layout never sees an escape sequence, and adaptive colours are
 resolved for the actual terminal at the end.
 
-That also changes some behaviour:
+lipgloss is where lipstick started, not a compatibility target: where a
+clearer rule exists, lipstick follows it. Notable differences:
 
 - Nested styles keep the outer style. In lipgloss the outer style wraps the
   line once, so a reset at the end of nested styled text ends it for the
@@ -270,6 +273,11 @@ That also changes some behaviour:
   the placed block as well as to the whitespace.
 - Lists and trees are both `Outline`s (`Mod Tree` would clash with
   `Data.Tree`).
+- Blocks are laid out in the width they are given, so text and tables
+  reflow without explicit widths.
+- Table columns shrink as CSS tables do: not below their longest word while
+  another column can still wrap. lipgloss shrinks columns by their median
+  cell width and may break words that did not need breaking.
 
 Not ported: `Alpha` (terminals cannot show transparency), the Windows
 build-number check (lipstick requires a Windows that supports ANSI

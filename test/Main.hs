@@ -1010,7 +1010,8 @@ deferredLayoutTests =
     , testCase "place keeps its natural width when there is no limit" $
         plainLines (place (align center) "x") @?= ["x"]
     , testCase "a table fits the width it is given, wrapping its cells" $
-        -- Columns shrink widest first, down to one column, as in lipgloss.
+        -- Even the longest words (8 and 9) do not fit side by side in 14
+        -- columns, so the columns shrink widest first below them.
         plainLinesAt 17 (table mempty ["Name", "Notes"] [["lipstick", "styled text for terminals"]])
           @?= [ "╭───────┬───────╮"
               , "│Name   │Notes  │"
@@ -1022,6 +1023,22 @@ deferredLayoutTests =
               , "│       │ls     │"
               , "╰───────┴───────╯"
               ]
+    , testCase "columns do not break a word while another column can wrap" $
+        plainLinesAt 15 (table mempty ["Name", "Notes"] [["lipstick", "ab cd ef gh ij kl"]])
+          @?= [ "╭────────┬────╮"
+              , "│Name    │Not…│"
+              , "├────────┼────┤"
+              , "│lipstick│ab  │"
+              , "│        │cd  │"
+              , "│        │ef  │"
+              , "│        │gh  │"
+              , "│        │ij  │"
+              , "│        │kl  │"
+              , "╰────────┴────╯"
+              ]
+    , testCase "a long header is cut rather than holding its column wide" $
+        plainLinesAt 15 (table mempty ["A very long header", "B"] [["x", "y"]])
+          @?= ["╭───────────┬─╮", "│A very lon…│B│", "├───────────┼─┤", "│x          │y│", "╰───────────┴─╯"]
     , testCase "a table with fillWidth grows its columns to fill the width" $
         plainLinesAt 13 (table fillWidth ["a", "b"] [["1", "2"]])
           @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]

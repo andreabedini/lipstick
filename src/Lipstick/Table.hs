@@ -65,8 +65,9 @@ instance HasBorder Table where
   overBorder f t = t {tableBorder = f (tableBorder t)}
 
 -- | Without a 'width', columns are as wide as their cells need, and shrink
--- (wrapping their text), widest first, when the table is laid out in less
--- space; with 'fillWidth', they grow to fill it. 'width' is the total width
+-- (wrapping their text) when the table is laid out in less space: widest
+-- first, but not below their longest word while another column can still
+-- wrap; with 'fillWidth', they grow to fill it. 'width' is the total width
 -- of the table: columns shrink or grow to fit it. 'height' is the most lines the table takes: body
 -- rows that do not fit are replaced by a row of ellipses, starting from
 -- the row set by 'yOffset'.
@@ -163,18 +164,23 @@ tableLayout m headers rows
     headerRow = [(HeaderCell, padRow headers) | not (null headers)]
     bodyRows = [(BodyCell i, padRow r) | (i, r) <- zip [0 ..] rows]
 
-    -- Cells stretch to the height of their row.
-    cellBlock pos = render $ tableCellStyle t pos <> stretchHeight <> case pos of
-      HeaderCell _ -> noWrap
-      BodyCell _ _ -> if tableWrap t then mempty else noWrap
+    -- Cells stretch to the height of their row. Header cells, and body
+    -- cells with noWrap, are cut with an ellipsis instead of wrapped.
+    truncates pos = case pos of
+      HeaderCell _ -> True
+      BodyCell _ _ -> not (tableWrap t)
+    cellBlock pos = render (tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty)
     cellBlocks (mk, r) = [cellBlock (mk c) inl | (c, inl) <- zip [0 ..] r]
 
-    -- Column widths.
-    natural = map (maximum . (0 :)) (transpose (map (map (reqMax . blockRequest) . cellBlocks) (headerRow ++ bodyRows)))
+    -- Column widths: the natural width, and the narrowest that breaks no
+    -- word (cells that are cut short can shrink to one column).
+    columns = transpose [[(pos, blockRequest b) | (pos, b) <- zip (map mk [0 ..]) (cellBlocks row)] | row@(mk, _) <- headerRow ++ bodyRows]
+    natural = [maximum (0 : [reqMax r | (_, r) <- col]) | col <- columns]
+    narrowest = [maximum (0 : [if truncates pos then min 1 (reqMax r) else reqMin r | (pos, r) <- col]) | col <- columns]
     sideW f e = if f edges then max 1 (textWidth e) else 0
     ruleW = if tableColumnRules t then max 1 (textWidth (leftEdge chars)) else 0
     frameW = sideW edgeLeft (leftEdge chars) + sideW edgeRight (rightEdge chars) + ruleW * (ncols - 1)
-    smallest = sum (map (min 1) natural) + frameW
+    smallest = sum narrowest + frameW
     full = sum natural + frameW
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     -- The narrowest and natural widths, before a maxWidth crop.
@@ -185,13 +191,15 @@ tableLayout m headers rows
       Nothing -> (smallest, full)
     req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) False
     -- Columns grow to a set width (unless they fit their content) or when
-    -- the table grows; they shrink, widest first, down to one column.
+    -- the table grows. They shrink widest first, but not below their
+    -- longest word while another column can still wrap; then further,
+    -- widest first, down to one column.
     columnWeight = if tableFitContent t || (not (isJust wSet) && weight == 0) then 0 else 1
 
     run w = (fitWidth w (withProps props (maybe allLines (`take` allLines) hgt)), (firstV, lastV))
       where
         tableW = cropLayoutWidth (propMaxWidth props) weight hi w
-        widths = allocate (tableW - frameW) [(min 1 n, n, columnWeight) | n <- natural]
+        widths = allocate (tableW - frameW) [(colLo, colHi, columnWeight) | (colLo, colHi) <- zip narrowest natural]
 
         -- A row's cells at their column widths, stretched to the tallest:
         -- one layout per cell. Its natural height is the number of lines.
