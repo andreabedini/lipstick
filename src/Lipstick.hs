@@ -221,7 +221,8 @@ module Lipstick
   , itemOffset
   , Enumerator (..)
   , enumerator
-  , enumeratorBy
+  , byDepth
+  , isLast
   , indenter
   , treeEnumerator
   , roundedTreeEnumerator

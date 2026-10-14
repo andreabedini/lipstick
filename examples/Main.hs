@@ -93,7 +93,7 @@ outlines =
         (Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" [], Node "Debian" []], Node "BSD" []])
     , render (paddingLeft 6) ""
     , nestedList
-        ( enumeratorBy (\d -> if d == 0 then roman else bullet)
+        ( enumerator (byDepth (\d -> if d == 0 then roman else bullet))
             <> enumeratorStyleWith (\p -> fg (if itemDepth p == 0 then pink else purple))
         )
         [ Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []]

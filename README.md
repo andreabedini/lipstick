@@ -177,7 +177,7 @@ tree
   (Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" []], Node "BSD" []])
 
 nestedList
-  (enumeratorBy (\depth -> if depth == 0 then roman else bullet) <> enumeratorStyle (fg "#F25D94"))
+  (enumerator (byDepth (\depth -> if depth == 0 then roman else bullet)) <> enumeratorStyle (fg "#F25D94"))
   [Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []], Node "Nyx" []]
 ```
 

@@ -333,7 +333,7 @@ outlineTests =
     , testCase "roman" $
         map (T.takeWhile (/= '.')) (plainLines (list (enumerator roman) (replicate 14 "x"))) !! 13 @?= " XIV"
     , testCase "nested list with an enumerator per depth" $
-        plainLines (nestedList (enumeratorBy (\d -> if d == 0 then arabic else dash)) [Node "a" [Node "b" []], Node "c" []])
+        plainLines (nestedList (enumerator (byDepth (\d -> if d == 0 then arabic else dash))) [Node "a" [Node "b" []], Node "c" []])
           @?= ["1. a  ", "   - b", "2. c  "]
     , testCase "item and enumerator styles" $
         toAnsi defaultRenderEnv (list (itemStyle bold <> enumeratorStyle (fg red)) ["a"])
@@ -613,11 +613,16 @@ outlineParityTests =
   testGroup
     "outline parity"
     [ testCase "custom indenter" $
-        plainLines (forest (indenter (\_ _ -> ":   ")) [Node "a\nb" [Node "c" []]])
+        plainLines (forest (indenter (const ":   ")) [Node "a\nb" [Node "c" []]])
           @?= ["└── a    ", ":   b    ", ":   └── c"]
     , testCase "indentation uses the enumerator style by default" $
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;31m    \ESC[0mb"
+    , testCase "enumerators and indenters see the item's position" $ do
+        let lastOnly = Enumerator (\p -> if isLast p then "> " else "- ") (const Nothing)
+        plainLines (list (enumerator lastOnly) ["a", "b", "c"]) @?= ["- a", "- b", "> c"]
+        plainLines (forest (indenter (\p -> T.pack (show (itemDepth p)) <> "   ")) [Node "a\nb" [Node "c" []]])
+          @?= ["└── a    ", "0   b    ", "0   └── c"]
     , testCase "indenter style replaces it" $
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red) <> indenterStyle (fg blue)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;34m    \ESC[0mb"

@@ -33,7 +33,8 @@ module Lipstick.Outline
     -- * Enumerators
   , Enumerator (..)
   , enumerator
-  , enumeratorBy
+  , byDepth
+  , isLast
   , indenter
   , treeEnumerator
   , roundedTreeEnumerator
@@ -58,9 +59,9 @@ import Lipstick.Style (Style, frame, render)
 
 -- | How items are marked.
 data Enumerator = Enumerator
-  { enumMarker :: Int -> Int -> Text
-  -- ^ the marker for the item at an index, given the number of siblings
-  , enumIndent :: Int -> Int -> Maybe Text
+  { enumMarker :: ItemPos -> Text
+  -- ^ the marker for an item
+  , enumIndent :: ItemPos -> Maybe Text
   -- ^ what goes before the item's further lines and its children;
   -- 'Nothing' for spaces as wide as the marker
   }
@@ -75,8 +76,8 @@ data ItemPos = ItemPos
   deriving (Eq, Show)
 
 data Outline = Outline
-  { outEnumerator :: Int -> Enumerator
-  , outIndenter :: Maybe (Int -> Int -> Text)
+  { outEnumerator :: Enumerator
+  , outIndenter :: Maybe (ItemPos -> Text)
   , outItemStyle :: ItemPos -> Mod Style
   , outEnumStyle :: ItemPos -> Mod Style
   , outIndentStyle :: Maybe (ItemPos -> Mod Style)
@@ -96,7 +97,7 @@ instance HasSize Outline where
 treeDefaults, listDefaults :: Outline
 treeDefaults =
   Outline
-    { outEnumerator = const treeEnumerator
+    { outEnumerator = treeEnumerator
     , outIndenter = Nothing
     , outItemStyle = const mempty
     , outEnumStyle = const mempty
@@ -105,7 +106,7 @@ treeDefaults =
     , outSize = defSize
     , outOffset = (0, 0)
     }
-listDefaults = treeDefaults {outEnumerator = const bullet}
+listDefaults = treeDefaults {outEnumerator = bullet}
 
 -- | A tree: the root, then its children.
 tree :: Mod Outline -> Tree Block -> Block
@@ -187,19 +188,19 @@ items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
         then let (start, end) = outOffset o in take (length kids0 - start - end) (drop start kids0)
         else kids0
     n = length kids
-    e = outEnumerator o depth
+    e = outEnumerator o
     pos i = ItemPos depth i n
     styledLine m t = concat (take 1 (gridCells (layoutIn ctx Nothing (render m (plain t)))))
     enumStyle i = outEnumStyle o (pos i)
     indentStyle i = maybe (enumStyle i) ($ pos i) (outIndentStyle o)
-    markers = [styledLine (enumStyle i) (enumMarker e n i) | i <- [0 .. n - 1]]
+    markers = [styledLine (enumStyle i) (enumMarker e (pos i)) | i <- [0 .. n - 1]]
     markerW = maximum (0 : map cellsWidth markers)
 
     item i mk (Node b children) =
       let -- Alignment space keeps the enumerator's background, as lipgloss.
           marker = alignCells (fillOf (enumStyle i)) right markerW mk
           indentText =
-            fromMaybe (T.replicate markerW " ") (fmap (\f -> f n i) (outIndenter o) <|> enumIndent e n i)
+            fromMaybe (T.replicate markerW " ") (fmap ($ pos i) (outIndenter o) <|> enumIndent e (pos i))
           indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
           itemStyle' = outItemStyle o (pos i)
        in Entry outer marker indent (fillOf itemStyle') (frame itemStyle' b)
@@ -243,19 +244,28 @@ enumeratorStyleWith f = fieldMod (\o -> o {outEnumStyle = \p -> outEnumStyle o p
 
 -- Enumerators -----------------------------------------------------------------
 
--- | Use this enumerator at every depth.
+-- | Mark items with this enumerator.
+--
+-- > nestedList (enumerator (byDepth (\d -> if d == 0 then roman else bullet))) items
 enumerator :: Enumerator -> Mod Outline
-enumerator e = enumeratorBy (const e)
+enumerator e = fieldMod (\o -> o {outEnumerator = e})
 
--- | What goes before an item's further lines and its children, given the
--- number of siblings and the item's index, instead of the enumerator's
--- own indentation.
-indenter :: (Int -> Int -> Text) -> Mod Outline
+-- | What goes before an item's further lines and its children, instead of
+-- the enumerator's own indentation.
+indenter :: (ItemPos -> Text) -> Mod Outline
 indenter f = fieldMod (\o -> o {outIndenter = Just f})
 
--- | Choose the enumerator by depth (0 for the top level).
-enumeratorBy :: (Int -> Enumerator) -> Mod Outline
-enumeratorBy f = fieldMod (\o -> o {outEnumerator = f})
+-- | An enumerator chosen by depth (0 for the top level).
+byDepth :: (Int -> Enumerator) -> Enumerator
+byDepth f =
+  Enumerator
+    { enumMarker = \p -> enumMarker (f (itemDepth p)) p
+    , enumIndent = \p -> enumIndent (f (itemDepth p)) p
+    }
+
+-- | Whether an item is the last among its siblings.
+isLast :: ItemPos -> Bool
+isLast p = itemIndex p == itemSiblings p - 1
 
 -- | @├── @ and @└── @, with @│@ continuing the branch.
 treeEnumerator :: Enumerator
@@ -268,12 +278,12 @@ roundedTreeEnumerator = branches "╰── "
 branches :: Text -> Enumerator
 branches lastBranch =
   Enumerator
-    { enumMarker = \n i -> if i == n - 1 then lastBranch else "├── "
-    , enumIndent = \n i -> Just (if i == n - 1 then "    " else "│   ")
+    { enumMarker = \p -> if isLast p then lastBranch else "├── "
+    , enumIndent = \p -> Just (if isLast p then "    " else "│   ")
     }
 
 constant :: Text -> Enumerator
-constant t = Enumerator (\_ _ -> t) (\_ _ -> Nothing)
+constant t = Enumerator (const t) (const Nothing)
 
 -- | @• @
 bullet :: Enumerator
@@ -288,7 +298,7 @@ asterisk :: Enumerator
 asterisk = constant "* "
 
 numbered :: (Int -> Text) -> Enumerator
-numbered f = Enumerator (\_ i -> f (i + 1) <> ". ") (\_ _ -> Nothing)
+numbered f = Enumerator (\p -> f (itemIndex p + 1) <> ". ") (const Nothing)
 
 -- | @1. @, @2. @, … (numbers are right-aligned)
 arabic :: Enumerator
