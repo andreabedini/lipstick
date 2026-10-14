@@ -174,8 +174,12 @@ emptyBlock = fromGrid emptyGrid
 -- aligned in it.
 textBlock :: Inline -> Block
 textBlock inl = Block $ \ctx ->
-  let transformed = maybe inl (\f -> let Inline segs = inl in Inline [(a, f t) | (a, t) <- segs]) (textTransform ctx)
-      ls0 = inlineLines (textTabWidth ctx) transformed
+  let ls0 = case textTransform ctx of
+        -- Shared by every layout in the common case, so text is segmented
+        -- once however often the block is laid out.
+        Nothing | textTabWidth ctx == textTabWidth defTextStyle -> defaultLines
+        Nothing -> inlineLines (textTabWidth ctx) inl
+        Just f -> let Inline segs = inl in inlineLines (textTabWidth ctx) (Inline [(a, f t) | (a, t) <- segs])
       ls = if textInline ctx then [concat ls0] else ls0
       hi = maximum (0 : map cellsWidth ls)
       lo
@@ -186,8 +190,10 @@ textBlock inl = Block $ \ctx ->
               | textInline ctx = map (cropCells w) ls
               | textWrap ctx = concatMap (wrapCellsWith (textBreaks ctx) w) ls
               | otherwise = map (truncateCells w) ls
-         in (fitWidth w (fromCellLines (map (alignText (textAlign ctx) w) fitted)), length fitted)
+         in (Grid w (length fitted) [cellsLine (cropCells w (alignText (textAlign ctx) w l)) | l <- fitted], length fitted)
    in Measured (Request lo hi 0 Nothing False True) run
+  where
+    defaultLines = inlineLines (textTabWidth defTextStyle) inl
 
 -- | The width to lay out something with a 'Lipstick.Mod.maxWidth' crop at,
 -- before cropping, given the crop, its weight for spare width, its natural
