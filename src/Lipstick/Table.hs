@@ -27,6 +27,7 @@ import Data.List (intercalate, transpose)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
+import Lipstick.Internal.Layout (allocate)
 import Lipstick.Internal.Types (Attrs (..), left)
 import Lipstick.Mod
 import Lipstick.Style (Style, render)
@@ -165,11 +166,11 @@ layoutTable m headers rows
     sideW f e = if f edges then max 1 (textWidth e) else 0
     ruleW = if tableColumnRules t then max 1 (textWidth (leftEdge chars)) else 0
     frameW = sideW edgeLeft (leftEdge chars) + sideW edgeRight (rightEdge chars) + ruleW * (ncols - 1)
+    -- Columns shrink to one column, widest first; with fitContent they
+    -- do not grow past their natural width.
     widths = case w of
       Nothing -> natural
-      Just total
-        | tableFitContent t && sum natural + frameW <= total -> natural
-        | otherwise -> fitWidths (total - frameW) natural
+      Just total -> allocate (total - frameW) [(min 1 n, n, if tableFitContent t then 0 else 1) | n <- natural]
 
     -- Cells rendered to their column width, as rows of cell lines.
     renderRow (mk, r) =
@@ -231,20 +232,3 @@ layoutTable m headers rows
     overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
     body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
     allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ bottomLines
-
-
--- | Make column widths add up to a target: shrink the widest column one
--- step at a time (no column goes below 1), or share out the extra space
--- from the left.
-fitWidths :: Int -> [Int] -> [Int]
-fitWidths target ws
-  | total > target && any (> 1) ws = fitWidths target (decrementWidest ws)
-  | total < target && not (null ws) =
-      let (q, r) = (target - total) `divMod` length ws
-       in [x + q + (if i < r then 1 else 0) | (i, x) <- zip [0 :: Int ..] ws]
-  | otherwise = ws
-  where
-    total = sum ws
-    decrementWidest xs = case break (== maximum xs) xs of
-      (a, x : b) -> a ++ (x - 1) : b
-      (a, []) -> a

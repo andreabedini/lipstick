@@ -8,6 +8,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
+import Lipstick.Internal.Layout (allocate)
 import Lipstick.Internal.Types (escapeUri)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
 import Lipstick.Width (clusters)
@@ -43,6 +44,7 @@ main = do
       , layoutTests
       , ansiTests
       , profileTests
+      , allocateTests
       , properties
       ]
 
@@ -852,6 +854,65 @@ stripAnsi t = case T.breakOn "\ESC" t of
     | "\ESC]" `T.isPrefixOf` rest ->
         before <> stripAnsi (T.drop 2 (snd (T.breakOn "\ESC\\" (T.drop 2 rest))))
     | otherwise -> before <> stripAnsi (T.drop 1 (T.dropWhile (/= 'm') rest))
+
+-- | (min, max, weight) for a child of a row.
+newtype Child = Child (Int, Int, Int)
+  deriving (Show)
+
+instance Arbitrary Child where
+  arbitrary = do
+    lo <- chooseInt (0, 12)
+    hi <- (lo +) <$> chooseInt (0, 20)
+    k <- frequency [(2, pure 0), (1, chooseInt (1, 3))]
+    pure (Child (lo, hi, k))
+
+allocateTests :: TestTree
+allocateTests =
+  testGroup
+    "allocate"
+    [ testProperty "matches the table's widest-first fitting" $ \(NonNegative target) ns ->
+        let natural = map getNonNegative ns
+         in allocate target [(min 1 n, n, 1) | n <- natural] === widestFirst target natural
+    , testProperty "spare space goes by weight" $ \cs ->
+        let children = [c | Child c <- cs]
+            his = [hi | (_, hi, _) <- children]
+         in forAll (chooseInt (sum his, sum his + 50)) $ \w ->
+              let ws = allocate w children
+               in conjoin [a >= hi | (a, hi) <- zip ws his]
+                    .&&. conjoin [a === hi | (a, (_, hi, 0)) <- zip ws children]
+                    .&&. (if any (\(_, _, k) -> k > 0) children then sum ws === w else ws === his)
+    , testProperty "shrinking stays within the bounds and fills the space" $ \cs ->
+        let children = [c | Child c <- cs]
+            los = [lo | (lo, _, _) <- children]
+            his = [hi | (_, hi, _) <- children]
+         in forAll (chooseInt (sum los, sum his)) $ \w ->
+              let ws = allocate w children
+               in sum ws === w .&&. conjoin [lo <= a .&&. a <= hi | (a, lo, hi) <- zip3 ws los his]
+    , testProperty "below the smallest widths, nothing goes under one column" $ \cs ->
+        let children = [c | Child c <- cs]
+            los = [lo | (lo, _, _) <- children]
+         in forAll (chooseInt (0, max 0 (sum los - 1))) $ \w ->
+              let ws = allocate w children
+               in sum ws === max w (sum (map (min 1) los))
+                    .&&. conjoin [min 1 lo <= a .&&. a <= lo | (a, lo) <- zip ws los]
+    , testCase "shrinks the widest first" $ allocate 10 [(1, 8, 0), (1, 3, 0), (1, 6, 0)] @?= [3, 3, 4]
+    , testCase "spare space by weight, left first" $ allocate 10 [(1, 2, 1), (1, 2, 0), (1, 2, 2)] @?= [4, 2, 4]
+    ]
+  where
+    -- How tables fitted their columns before 'allocate': shrink the widest
+    -- column (the leftmost of equals) one step at a time, down to one
+    -- column, or share out spare space evenly from the left.
+    widestFirst target ws
+      | tot > target && any (> 1) ws = widestFirst target (decrementWidest ws)
+      | tot < target && not (null ws) =
+          let (q, r) = (target - tot) `divMod` length ws
+           in [x + q + (if i < r then 1 else 0) | (i, x) <- zip [0 :: Int ..] ws]
+      | otherwise = ws
+      where
+        tot = sum ws
+        decrementWidest xs = case break (== maximum xs) xs of
+          (a, x : b) -> a ++ (x - 1) : b
+          (a, []) -> a
 
 properties :: TestTree
 properties =
