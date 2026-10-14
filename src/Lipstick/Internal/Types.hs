@@ -7,6 +7,7 @@ module Lipstick.Internal.Types
   , setFlag
   , getFlag
   , fillAttrs
+  , escapeUri
 
     -- * Positions
   , Position (..)
@@ -20,8 +21,12 @@ module Lipstick.Internal.Types
   ) where
 
 import Control.Applicative ((<|>))
+import Data.ByteString qualified as BS
 import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Lipstick.Color (Color)
+import Text.Printf (printf)
 
 data Underline
   = NoUnderline
@@ -95,6 +100,17 @@ getFlag f = case f of
 -- (alignment, padding): only the background and reverse video carry over.
 fillAttrs :: Attrs -> Attrs
 fillAttrs a = mempty {attrBg = attrBg a, attrReverse = attrReverse a}
+
+-- | A URI made safe for an OSC 8 hyperlink, which allows only printable
+-- ASCII: every other character, including the controls that would end the
+-- escape sequence early, is percent-encoded as UTF-8. Existing escapes are
+-- kept, so applying it twice changes nothing.
+escapeUri :: Text -> Text
+escapeUri = T.concatMap escape
+  where
+    escape c
+      | c > ' ' && c < '\DEL' = T.singleton c
+      | otherwise = T.pack (concatMap (printf "%%%02X") (BS.unpack (T.encodeUtf8 (T.singleton c))))
 
 -- | A position along an axis: 0 is left/top, 1 is right/bottom.
 newtype Position = Position Double

@@ -92,7 +92,7 @@ renderLine env = go plainSGR Nothing . lineSpans
        in linkB <> sgrB <> B.fromText t <> go sgr lnk' rest
 
 openLink :: Text -> Builder
-openLink url = "\ESC]8;;" <> B.fromText url <> "\ESC\\"
+openLink url = "\ESC]8;;" <> B.fromText (escapeUri url) <> "\ESC\\"
 
 closeLink :: Builder
 closeLink = "\ESC]8;;\ESC\\"

@@ -8,6 +8,7 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
+import Lipstick.Internal.Types (escapeUri)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
 import Lipstick.Width (clusters)
 import Numeric (readHex)
@@ -170,6 +171,8 @@ fromAnsiTests =
     , testCase "other sequences are dropped" $
         parsed "\ESC[2K\ESC(Bab\ESC]0;title\acd\ESC7" @?= "abcd"
     , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
+    , testCase "hyperlink with a C1 control is escaped on output" $
+        parsed "\ESC]8;;http://a\x9B\&2J\ESC\\x" @?= "\ESC]8;;http://a%C2%9B2J\ESC\\x\ESC]8;;\ESC\\"
     , testCase "keeps the outer style" $
         toAnsi defaultRenderEnv (render (bg "4") (fromAnsi "\ESC[1ma\ESC[0mb"))
           @?= "\ESC[0;1;44ma\ESC[0;44mb\ESC[0m"
@@ -694,6 +697,12 @@ ansiTests =
     , testCase "hyperlink" $
         toAnsi defaultRenderEnv (render (link "https://x.y") "a")
           @?= "\ESC]8;;https://x.y\ESC\\a\ESC]8;;\ESC\\"
+    , testCase "hyperlink controls and non-ASCII are percent-encoded" $
+        toAnsi defaultRenderEnv (render (link "http://x\ESC]0;t\a y/\233") "a")
+          @?= "\ESC]8;;http://x%1B]0;t%07%20y/%C3%A9\ESC\\a\ESC]8;;\ESC\\"
+    , testProperty "escaped URIs are printable ASCII, and escaping is idempotent" $ \s ->
+        let u = escapeUri (T.pack s)
+         in T.all (\c -> c > ' ' && c < '\DEL') u .&&. escapeUri u === u
     , testCase "output is UTF-8 whatever the handle's encoding" $ do
         dir <- getTemporaryDirectory
         (path, h) <- openTempFile dir "lipstick.txt"

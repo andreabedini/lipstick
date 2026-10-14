@@ -22,7 +22,7 @@ import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), resolveColor)
 import Lipstick.Internal.Block (Block (..), Line (..), Span (..))
-import Lipstick.Internal.Types (Attrs (..), Underline (..))
+import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
 -- | A fixed-size widget showing a block.
 blockWidget :: RenderEnv -> Block -> Widget n
@@ -55,7 +55,7 @@ attr (RenderEnv profile dark) a
         $ foldl V.withStyle V.defAttr styles
   where
     withColor f c x = maybe x (f x . vtyColor) (c >>= resolveColor profile dark)
-    withLink url x = maybe x (V.withURL x) url
+    withLink url x = maybe x (V.withURL x . escapeUri) url
     on f = fromMaybe False (f a)
     styles =
       [V.bold | on attrBold]

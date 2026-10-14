@@ -32,6 +32,9 @@ main =
                   `V.withBackColor` V.RGBColor 16 32 48
                   `V.withURL` "https://x.y"
           img @?= V.text' expected "a"
+      , testCase "link controls are percent-encoded" $
+          blockImage defaultRenderEnv (render (link "http://x\ESC\\ y") "a")
+            @?= V.text' (V.defAttr `V.withURL` "http://x%1B\\%20y") "a"
       , testCase "256 colours" $
           blockImage defaultRenderEnv (render (fg "200") "a") @?= V.text' (V.defAttr `V.withForeColor` V.Color240 184) "a"
       , testCase "light and dark backgrounds" $ do
