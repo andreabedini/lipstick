@@ -1,12 +1,14 @@
 -- | The representation of rendered output. Not part of the stable API.
 --
 -- A 'Grid' is a rectangle: every line is exactly 'gridWidth' columns
--- wide and there are exactly 'gridHeight' lines. Layout code works on
--- lines of 'Cell's (one cluster each) and packs them back into 'Span's.
+-- wide and there are exactly 'gridHeight' lines. A line is a list of
+-- 'Cell's, one grapheme cluster each, so layout never segments text
+-- twice; output groups them into 'Span's with 'lineSpans'.
 module Lipstick.Internal.Grid
   ( -- * Grids
     Grid (..)
   , Line (..)
+  , lineSpans
   , Span (..)
   , emptyGrid
   , fromCellLines
@@ -18,7 +20,6 @@ module Lipstick.Internal.Grid
     -- * Cells
   , Cell (..)
   , cellsWidth
-  , lineCells
   , cellsLine
   , blankCells
   , fillCells
@@ -54,18 +55,26 @@ data Grid = Grid
 
 data Line = Line
   { lineWidth :: !Int
-  , lineSpans :: ![Span]
+  , lineCells :: ![Cell]
   }
   deriving (Eq, Show)
 
--- | A run of clusters with the same attributes. The text contains no
--- newlines or control characters.
+-- | A run of clusters with the same attributes, for output. The text
+-- contains no newlines or control characters.
 data Span = Span
   { spanAttrs :: !Attrs
   , spanText :: !Text
   , spanWidth :: !Int
   }
   deriving (Eq, Show)
+
+-- | The runs of cells with the same attributes in a line.
+lineSpans :: Line -> [Span]
+lineSpans = map toSpan . groupBy ((==) `on` cellAttrs) . lineCells
+  where
+    toSpan grp = case grp of
+      c : _ -> Span (cellAttrs c) (T.concat (map cellText grp)) (cellsWidth grp)
+      [] -> Span mempty T.empty 0
 
 -- | One cluster occupying 'cellWidth' columns.
 data Cell = Cell
@@ -115,17 +124,8 @@ joinGridsV p w gs =
 cellsWidth :: [Cell] -> Int
 cellsWidth = sum . map cellWidth
 
-lineCells :: Line -> [Cell]
-lineCells = concatMap spanCells . lineSpans
-  where
-    spanCells (Span a t _) = [Cell a c w | (c, w) <- clusters t]
-
 cellsLine :: [Cell] -> Line
-cellsLine cs = Line (cellsWidth cs) (map toSpan (groupBy ((==) `on` cellAttrs) cs))
-  where
-    toSpan grp = case grp of
-      c : _ -> Span (cellAttrs c) (T.concat (map cellText grp)) (cellsWidth grp)
-      [] -> Span mempty T.empty 0
+cellsLine cs = Line (cellsWidth cs) cs
 
 blankCells :: Attrs -> Int -> [Cell]
 blankCells a n = replicate n (Cell a (T.singleton ' ') 1)

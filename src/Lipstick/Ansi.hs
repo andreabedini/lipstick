@@ -84,20 +84,22 @@ resolveAttrs (RenderEnv p dark _) a =
     on f = fromMaybe False (f a)
     ul = fromMaybe NoUnderline (attrUnderline a)
 
--- | The pieces of a line: span texts and escape sequences, to be joined
--- with one 'T.concat'.
+-- | The pieces of a line: cluster texts and escape sequences, to be joined
+-- with one 'T.concat'. Attributes are resolved only where they change.
 renderLine :: RenderEnv -> Line -> [Text]
-renderLine env = go plainSGR Nothing . lineSpans
+renderLine env = go plainSGR Nothing Nothing . lineCells
   where
-    go cur lnk [] =
+    go cur lnk _ [] =
       [sgrCode plainSGR | cur /= plainSGR] ++ [closeLink | Just _ <- [lnk]]
-    go cur lnk (Span a t _ : rest) =
-      let (sgr, lnk') = resolveAttrs env a
-          linkB
-            | lnk' == lnk = []
-            | otherwise = [closeLink | Just _ <- [lnk]] ++ [openLink u | Just u <- [lnk']]
-          sgrB = [sgrCode sgr | sgr /= cur]
-       in linkB ++ sgrB ++ t : go sgr lnk' rest
+    go cur lnk prev (Cell a t _ : rest)
+      | Just a == prev = t : go cur lnk prev rest
+      | otherwise =
+          let (sgr, lnk') = resolveAttrs env a
+              linkB
+                | lnk' == lnk = []
+                | otherwise = [closeLink | Just _ <- [lnk]] ++ [openLink u | Just u <- [lnk']]
+              sgrB = [sgrCode sgr | sgr /= cur]
+           in linkB ++ sgrB ++ t : go sgr lnk' (Just a) rest
 
 openLink :: Text -> Text
 openLink url = T.concat ["\ESC]8;;", escapeUri url, "\ESC\\"]

@@ -38,23 +38,26 @@ textWidth = sum . map snd . clusters
 charWidth :: Char -> Int
 charWidth = codeWidth . props
 
--- | Split text into grapheme clusters, each with its display width.
+-- | Split text into grapheme clusters, each with its display width. The
+-- clusters are slices of the text, not copies.
 clusters :: Text -> [(Text, Int)]
-clusters = go . T.unpack
+clusters = go
   where
-    go [] = []
-    go (c : cs) =
-      let p = props c
-          (ext, rest) = extend (start p) p cs
-          cl = c : map fst ext
-       in (T.pack cl, clusterWidth ((c, p) : ext)) : go rest
+    go t = case T.uncons t of
+      Nothing -> []
+      Just (c, rest) ->
+        let p = props c
+            (n, ext) = extend (start p) p 1 rest
+            (cl, more) = T.splitAt n t
+         in (cl, clusterWidth ((c, p) : ext)) : go more
 
-    extend _ _ [] = ([], [])
-    extend st prev (c : cs)
-      | joins st prev p = let (ext, rest) = extend (step st p) p cs in ((c, p) : ext, rest)
-      | otherwise = ([], c : cs)
-      where
-        p = props c
+    -- How many characters the cluster has, and the ones after the first.
+    extend st prev n t = case T.uncons t of
+      Just (c, rest)
+        | let p = props c
+        , joins st prev p ->
+            let (n', ext) = extend (step st p) p (n + 1) rest in (n', (c, p) : ext)
+      _ -> (n :: Int, [])
 
 -- Properties ------------------------------------------------------------------
 

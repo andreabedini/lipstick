@@ -23,7 +23,7 @@ import Lens.Micro ((^.))
 import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), layout, resolveColor)
-import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
+import Lipstick.Internal.Grid (Grid (..), Span (..), lineSpans)
 import Lipstick.Internal.Layout (Block (..), Request (..))
 import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
@@ -44,7 +44,7 @@ blockWidget env b = Widget policy Fixed $ do
 blockImage :: RenderEnv -> Block -> V.Image
 blockImage env b = V.vertCat (map line (gridLines (layout (envWidth env) b)))
   where
-    line (Line _ spans) = V.horizCat [V.text' (attr env a) t | Span a t _ <- spans]
+    line l = V.horizCat [V.text' (attr env a) t | Span a t _ <- lineSpans l]
 
 -- | The profile to resolve colours for, given a vty output's colour mode.
 profileForColorMode :: V.ColorMode -> ColorProfile
