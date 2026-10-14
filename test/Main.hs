@@ -8,9 +8,8 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
-import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..), lineSpans)
+import Lipstick.Grid (Span (..), gridLines, lineSpans, lineWidth)
 import Lipstick.Internal.Layout (Assign (..), Measured (..), Request (..), allocate, allocateWithin, measure)
-import Lipstick.Internal.Types (escapeUri)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv, widthFromEnv)
 import Lipstick.Width (clusters)
 import Numeric (readHex)

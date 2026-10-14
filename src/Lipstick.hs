@@ -38,6 +38,7 @@ module Lipstick
   , blockWidth
   , blockHeight
   , blockMinWidth
+  , blockGrows
   , emptyBlock
   , text
   , fromInline
@@ -50,6 +51,7 @@ module Lipstick
   , plain
   , styled
   , fromAnsi
+  , escapeUri
   , styleRanges
   , styleIndices
   , Attrs (..)

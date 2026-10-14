@@ -13,8 +13,8 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick (Block, ColorProfile (TrueColor), TermColor (..), layout, resolveColor, termColorRGB)
-import Lipstick.Internal.Grid (Grid (..), Cell (..), gridCells)
-import Lipstick.Internal.Types (Attrs (..), Underline (..))
+import Lipstick (Attrs (..), Underline (..))
+import Lipstick.Grid (cellAttrs, cellText, cellWidth, gridHeight, gridLines, gridWidth, lineCells)
 import Numeric (showFFloat, showHex)
 
 -- Geometry ----------------------------------------------------------------------
@@ -58,7 +58,7 @@ blockSvg block =
       ++ ["</g>", "</svg>"]
   where
     b = layout Nothing block
-    rows = zip [0 :: Int ..] (gridCells b)
+    rows = zip [0 :: Int ..] (map lineCells (gridLines b))
     contentW = fromIntegral (gridWidth b) * cellW
     contentH = fromIntegral (gridHeight b) * cellH
     winW = padX * 2 + contentW

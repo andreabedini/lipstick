@@ -46,7 +46,7 @@ import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Types
-import Lipstick.Width (clusters)
+import Lipstick.Internal.Width (clusters)
 
 data Grid = Grid
   { gridWidth :: !Int

@@ -143,8 +143,8 @@ module Lipstick.Internal.Mod
 
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
-import Lipstick.Border (Border, normalBorder)
-import Lipstick.Color (Color)
+import Lipstick.Internal.Border (Border, normalBorder)
+import Lipstick.Internal.Color (Color)
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 

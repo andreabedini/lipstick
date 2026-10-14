@@ -8,6 +8,7 @@ module Lipstick.Ansi
   , toAnsi
   , toAnsiLines
   , renderPlain
+  , escapeUri
   , fromAnsi
   , ansiWidth
   , ansiHeight

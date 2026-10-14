@@ -261,6 +261,8 @@ gives it without any escape sequences.
 The `lipstick-brick` package in this repository shows blocks in brick and
 vty applications: `blockWidget` and `blockImage`. A `blockWidget` is laid
 out in the width brick gives it, and takes all of it when the block grows.
+It uses only the public API: `Lipstick.Grid` gives the laid-out lines,
+cells and styled spans of a block, for showing blocks anywhere else too.
 
 ## How lipstick differs from lipgloss
 
@@ -311,7 +313,7 @@ cabal run lipstick-screenshots -- docs/images
 CI regenerates them and fails if they differ from the committed ones, so a
 change in rendering shows up as a diff of `docs/images`.
 
-The Unicode tables in `src/Lipstick/Internal/UnicodeTable.hs` are generated
+The Unicode tables in `internal/Lipstick/Internal/UnicodeTable.hs` are generated
 from the Unicode Character Database, at the version GHC's `base` uses (see
 `GHC.Unicode.unicodeVersion`). To regenerate them, download
 `EastAsianWidth.txt`, `auxiliary/GraphemeBreakProperty.txt`,
@@ -319,7 +321,7 @@ from the Unicode Character Database, at the version GHC's `base` uses (see
 `https://www.unicode.org/Public/<version>/ucd/` into one directory and run
 
 ```
-runghc scripts/GenUnicodeTable.hs <version> <directory> > src/Lipstick/Internal/UnicodeTable.hs
+runghc scripts/GenUnicodeTable.hs <version> <directory> > internal/Lipstick/Internal/UnicodeTable.hs
 ```
 
 The conformance test data in `test/data/GraphemeBreakTest.txt` comes from

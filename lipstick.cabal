@@ -30,13 +30,17 @@ common warnings
 
 library
     import:           warnings
-    hs-source-dirs:   src
+    -- The public modules are in src; the representation of blocks, grids,
+    -- styles and colours is in internal, as other-modules, so other
+    -- packages cannot import it.
+    hs-source-dirs:   src internal
     exposed-modules:
         Lipstick
         Lipstick.Ansi
         Lipstick.Block
         Lipstick.Border
         Lipstick.Color
+        Lipstick.Grid
         Lipstick.Layer
         Lipstick.Mod
         Lipstick.Place
@@ -45,12 +49,15 @@ library
         Lipstick.Outline
         Lipstick.Terminal
         Lipstick.Width
+    other-modules:
+        Lipstick.Internal.Border
+        Lipstick.Internal.Color
         Lipstick.Internal.Grid
         Lipstick.Internal.Layout
+        Lipstick.Internal.Mod
         Lipstick.Internal.Types
         Lipstick.Internal.UnicodeTable
-    other-modules:
-        Lipstick.Internal.Mod
+        Lipstick.Internal.Width
     build-depends:
         base ^>=4.21.0.0,
         array ^>=0.5,
@@ -79,7 +86,7 @@ executable lipstick-screenshots
     hs-source-dirs:   examples
     build-depends:
         base,
-        filepath,
+        filepath ^>=1.5,
         text,
         lipstick
     default-language: GHC2024
@@ -88,11 +95,40 @@ test-suite lipstick-test
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          Main.hs
-    hs-source-dirs:   test
+    -- The tests reach the library's internals by compiling its sources.
+    hs-source-dirs:   test src internal
+    other-modules:
+        Lipstick
+        Lipstick.Ansi
+        Lipstick.Block
+        Lipstick.Border
+        Lipstick.Color
+        Lipstick.Grid
+        Lipstick.Layer
+        Lipstick.Mod
+        Lipstick.Place
+        Lipstick.Style
+        Lipstick.Table
+        Lipstick.Outline
+        Lipstick.Terminal
+        Lipstick.Width
+        Lipstick.Internal.Border
+        Lipstick.Internal.Color
+        Lipstick.Internal.Grid
+        Lipstick.Internal.Layout
+        Lipstick.Internal.Mod
+        Lipstick.Internal.Types
+        Lipstick.Internal.UnicodeTable
+        Lipstick.Internal.Width
     build-depends:
-        base,
-        text,
-        lipstick,
+        base ^>=4.21.0.0,
+        array ^>=0.5,
+        bytestring >=0.11 && <0.13,
+        text >=2.1.2 && <2.2,
+        ansi-terminal ^>=1.1,
+        terminal-size >=0.3.4 && <0.4,
+        colour ^>=2.3,
+        containers >=0.6 && <0.8,
         directory,
         tasty ^>=1.5,
         tasty-hunit ^>=0.10,

@@ -10,6 +10,7 @@ module Lipstick.Block
   , blockWidth
   , blockHeight
   , blockMinWidth
+  , blockGrows
   , emptyBlock
   , text
   , fromInline
@@ -37,7 +38,8 @@ module Lipstick.Block
 
 import Data.Text (Text)
 import Data.Text qualified as T
-import Lipstick.Internal.Grid
+import Lipstick.Grid (Grid, gridHeight, gridWidth)
+import Lipstick.Internal.Grid hiding (Grid (..))
 import Lipstick.Internal.Layout
 import Lipstick.Internal.Types
 import Lipstick.Internal.Mod (Mod, Props (..), propsOf, runMod)
@@ -53,6 +55,11 @@ blockHeight b = snd (blockLayout (measure b) (Assign (blockWidth b) 0))
 -- | The narrowest a block can be laid out without breaking words.
 blockMinWidth :: Block -> Int
 blockMinWidth = reqMin . blockRequest . measure
+
+-- | Whether a block takes spare width (see 'Lipstick.Mod.grow'), as an
+-- adapter needs to know to size it.
+blockGrows :: Block -> Bool
+blockGrows = (> 0) . reqGrow . blockRequest . measure
 
 -- | Unstyled text; lines are split on newlines, and wrap to the width the
 -- block is given.

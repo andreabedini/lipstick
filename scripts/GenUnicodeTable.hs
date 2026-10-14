@@ -1,9 +1,9 @@
--- | Generate src/Lipstick/Internal/UnicodeTable.hs from the Unicode
+-- | Generate internal/Lipstick/Internal/UnicodeTable.hs from the Unicode
 -- Character Database.
 --
 -- Usage:
 --
--- > runghc scripts/GenUnicodeTable.hs VERSION UCD_DIR > src/Lipstick/Internal/UnicodeTable.hs
+-- > runghc scripts/GenUnicodeTable.hs VERSION UCD_DIR > internal/Lipstick/Internal/UnicodeTable.hs
 --
 -- where UCD_DIR contains EastAsianWidth.txt, GraphemeBreakProperty.txt,
 -- emoji-data.txt and DerivedCoreProperties.txt, downloaded from
