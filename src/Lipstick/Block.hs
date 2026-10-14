@@ -4,6 +4,70 @@
 -- and things that 'Lipstick.Mod.grow' take spare columns, to fit the width
 -- it gets. Output functions lay blocks out in the output's width (see
 -- 'Lipstick.Ansi.envWidth'); 'layout' does it explicitly.
+--
+-- == Examples
+--
+-- A block of text has a natural width, the narrowest it can be without
+-- breaking words, and a height at its natural width:
+--
+-- >>> let para = text "A block takes the width it is given."
+-- >>> (blockWidth para, blockMinWidth para, blockHeight para)
+-- (36,6,1)
+--
+-- Laid out in less width, the text wraps:
+--
+-- >>> putBlock (fromGrid (layout (Just 16) para))
+-- A block takes
+-- the width it is
+-- given.
+--
+-- Blocks side by side, aligned by a 'Position':
+--
+-- >>> let tall = render (border normalBorder) "one\ntwo\nthree"
+-- >>> let short = render (border normalBorder) "four"
+-- >>> putBlock (joinHorizontal top [tall, short])
+-- ┌─────┐┌────┐
+-- │one  ││four│
+-- │two  │└────┘
+-- │three│
+-- └─────┘
+-- >>> putBlock (joinHorizontal center [tall, short])
+-- ┌─────┐
+-- │one  │┌────┐
+-- │two  ││four│
+-- │three│└────┘
+-- └─────┘
+--
+-- Stacked:
+--
+-- >>> putBlock (joinVertical right [tall, short])
+-- ┌─────┐
+-- │one  │
+-- │two  │
+-- │three│
+-- └─────┘
+--  ┌────┐
+--  │four│
+--  └────┘
+--
+-- A block that 'Lipstick.Mod.fillWidth's takes the spare columns of its
+-- row, and one that 'Lipstick.Mod.stretchHeight's is as tall as the row:
+--
+-- >>> let stretchy = render (border normalBorder <> fillWidth <> stretchHeight) "fills"
+-- >>> putBlock (fromGrid (layout (Just 30) (hcat [tall, stretchy])))
+-- ┌─────┐┌─────────────────────┐
+-- │one  ││fills                │
+-- │two  ││                     │
+-- │three││                     │
+-- └─────┘└─────────────────────┘
+--
+-- Text with several styles is 'Inline', built with 'styled' and '<>'
+-- (the output is shown without its attributes):
+--
+-- >>> putBlock (render (width 20) (styled bold "Error: " <> "the file " <> styled italic "notes.txt" <> " was not found"))
+-- Error: the file
+-- notes.txt was not
+-- found
 module Lipstick.Block
   ( -- * Blocks
     Block
@@ -44,6 +108,9 @@ import Lipstick.Internal.Layout
 import Lipstick.Internal.Types
 import Lipstick.Internal.Mod (Mod, Props (..), propsOf, runMod)
 
+-- $setup
+-- >>> import Lipstick
+
 -- | The natural width of a block: as wide as it is with nothing wrapped.
 blockWidth :: Block -> Int
 blockWidth = reqMax . blockRequest . measure
@@ -74,7 +141,8 @@ fromInline = textBlock
 -- | Text with attributes, for building 'Inline' text with '<>'. Only the
 -- text attributes of the modifier apply.
 --
--- > styled bold "Error: " <> "file not found"
+-- >>> putBlock (fromInline (styled bold "Error: " <> "file not found"))
+-- Error: file not found
 styled :: Mod Inline -> Text -> Inline
 styled m t = Inline [(propAttrs (snd (runMod m mempty)), t)]
 
@@ -150,7 +218,8 @@ vcat = joinVertical left
 -- and so its tab width, is not known yet. The range attributes go on top
 -- of the text's own.
 --
--- > styleRanges [(0, 3, bold <> fg red)] "foobar"
+-- >>> toAnsi defaultRenderEnv (fromInline (styleRanges [(0, 3, bold <> fg red)] "foobar"))
+-- "\ESC[0;1;31mfoo\ESC[0mbar"
 styleRanges :: [(Int, Int, Mod Inline)] -> Inline -> Inline
 styleRanges ranges = restyle $ \col _ ->
   mconcat [propAttrs (propsOf m) | (s, e, m) <- ranges, col >= s, col < e]
@@ -159,7 +228,8 @@ styleRanges ranges = restyle $ \col _ ->
 -- newlines) at the given indices, and other attributes to the rest. Handy
 -- for highlighting fuzzy-search matches.
 --
--- > styleIndices [0, 3] (fg pink <> underline) mempty "foobar"
+-- >>> toAnsi defaultRenderEnv (fromInline (styleIndices [0, 3] underline mempty "foobar"))
+-- "\ESC[0;4mf\ESC[0moo\ESC[0;4mb\ESC[0mar"
 styleIndices :: [Int] -> Mod Inline -> Mod Inline -> Inline -> Inline
 styleIndices indices matched unmatched = restyle $ \_ i ->
   propAttrs (propsOf (if i `elem` indices then matched else unmatched))

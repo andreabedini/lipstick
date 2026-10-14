@@ -1,5 +1,78 @@
 -- | Styles: text attributes plus a box model (alignment, padding, border,
 -- margins), applied to text or to an existing block.
+--
+-- A style is a @'Mod' 'Style'@, built from the modifiers in
+-- "Lipstick.Mod". The examples print with 'Lipstick.Terminal.putBlock';
+-- the output is shown without colours.
+--
+-- == Examples
+--
+-- Text in a box:
+--
+-- >>> putBlock (render (border roundedBorder <> padding 0 1) "Hello, kitty")
+-- ╭──────────────╮
+-- │ Hello, kitty │
+-- ╰──────────────╯
+--
+-- With a 'width', text is word-wrapped and aligned inside it:
+--
+-- >>> putBlock (render (width 18 <> border normalBorder <> align center) "Text wraps to fit the width")
+-- ┌────────────────┐
+-- │ Text wraps to  │
+-- │ fit the width  │
+-- └────────────────┘
+--
+-- With 'noWrap', lines that are too long are cut short instead:
+--
+-- >>> putBlock (render (width 14 <> border normalBorder <> noWrap) "This line is too long")
+-- ┌────────────┐
+-- │This line i…│
+-- └────────────┘
+--
+-- Padding is inside the border and margins outside it; 'paddingChar' and
+-- 'marginChar' make them visible:
+--
+-- >>> putBlock (render (border normalBorder <> padding 1 2 <> paddingChar '·' <> margin 1 3 <> marginChar '░') "box")
+-- ░░░░░░░░░░░░░░░
+-- ░░░┌───────┐░░░
+-- ░░░│·······│░░░
+-- ░░░│··box··│░░░
+-- ░░░│·······│░░░
+-- ░░░└───────┘░░░
+-- ░░░░░░░░░░░░░░░
+--
+-- Some sides of the border only:
+--
+-- >>> putBlock (render (border thickBorder <> borderLeft False <> borderRight False) "rules above and below")
+-- ━━━━━━━━━━━━━━━━━━━━━
+-- rules above and below
+-- ━━━━━━━━━━━━━━━━━━━━━
+--
+-- Later settings win, so a style is extended with '<>':
+--
+-- >>> let card = border roundedBorder <> padding 0 1 <> width 20
+-- >>> let wide = card <> width 30
+-- >>> putBlock (vcat [render card "a card", render wide "a wider card"])
+-- ╭──────────────────╮
+-- │ a card           │
+-- ╰──────────────────╯
+-- ╭────────────────────────────╮
+-- │ a wider card               │
+-- ╰────────────────────────────╯
+--
+-- 'frame' puts a block that already exists in a box:
+--
+-- >>> putBlock (frame (border doubleBorder <> padding 0 1) (vcat ["one", "two", "three"]))
+-- ╔═══════╗
+-- ║ one   ║
+-- ║ two   ║
+-- ║ three ║
+-- ╚═══════╝
+--
+-- The getters read a style back:
+--
+-- >>> frameSize (border normalBorder <> padding 1 2 <> margin 0 1)
+-- (8,4)
 module Lipstick.Style
   ( Style
   , render
@@ -53,6 +126,10 @@ import Lipstick.Internal.Types
 import Lipstick.Internal.Mod
 import Lipstick.Width (textWidth)
 
+-- $setup
+-- >>> import Lipstick
+-- >>> import Data.Text qualified as T
+
 -- | The fields of a style. Its text attributes are in the common
 -- 'Props': they apply to the content and padding, not to the border or
 -- margins, which have their own colours ('borderFg', 'marginBg').
@@ -102,6 +179,9 @@ unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 
 -- | Render on a single line: newlines are removed, and padding, margins,
 -- border, size and alignment are ignored, except 'maxWidth'.
+--
+-- >>> putBlock (render (inline <> border normalBorder <> padding 1 1) "one\ntwo")
+-- onetwo
 inline :: Mod Style
 inline = fieldMod (\s -> s {styleInline = True})
 
@@ -111,7 +191,8 @@ unsetInline = fieldMod (\s -> s {styleInline = False})
 -- | Change the text before rendering it (each styled piece separately),
 -- including text inside blocks the style frames.
 --
--- > render (transform T.toUpper) "raow!"
+-- >>> putBlock (render (transform T.toUpper) "raow!")
+-- RAOW!
 transform :: (Text -> Text) -> Mod Style
 transform f = fieldMod (\s -> s {styleTransform = Just f})
 
@@ -121,7 +202,15 @@ unsetTransform = fieldMod (\s -> s {styleTransform = Nothing})
 -- | Also allow a line break after any of these characters (such as @-@),
 -- besides at spaces.
 --
--- > render (breakAfter "-" <> width 20) "a long-winded, hyphenated sentence"
+-- >>> putBlock (render (width 9) "a long-winded sentence")
+-- a
+-- long-wind
+-- ed
+-- sentence
+-- >>> putBlock (render (breakAfter "-" <> width 9) "a long-winded sentence")
+-- a long-
+-- winded
+-- sentence
 breakAfter :: [Char] -> Mod Style
 breakAfter cs = fieldMod (\s -> s {styleBreaks = cs})
 
@@ -142,6 +231,12 @@ strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 
 -- | Apply a parent style, keeping the padding and margins already set:
 -- lipgloss's @Inherit@.
+--
+-- >>> let parent = border roundedBorder <> padding 1 4
+-- >>> putBlock (render (padding 0 1 <> inherit parent) "child")
+-- ╭───────╮
+-- │ child │
+-- ╰───────╯
 inherit :: Mod Style -> Mod Style
 inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
 

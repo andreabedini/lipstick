@@ -1,4 +1,4 @@
--- Modifiers, in the style of optparse-applicative's builder.
+-- | Modifiers, in the style of optparse-applicative's builder.
 --
 -- A @'Mod' f@ is a change to a thing @f@ (a 'Lipstick.Style.Style', a
 -- 'Lipstick.Table.Table', a 'Lipstick.Place.Place', …). Modifiers form a
@@ -22,6 +22,81 @@
 -- * a change to the thing's own fields. Modifiers shared by some things go
 --   through the classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and
 --   'HasWrap'.
+--
+-- == Examples
+--
+-- The examples print with 'Lipstick.Terminal.putBlock'; the output is
+-- shown without colours and other attributes.
+--
+-- Modifiers of text attributes and of the crop work on anything:
+--
+-- >>> let base = bold <> fg red
+-- >>> putBlock (render (base <> border normalBorder) "a style")
+-- ┌───────┐
+-- │a style│
+-- └───────┘
+-- >>> putBlock (table base ["a table"] [["cell"]])
+-- ╭───────╮
+-- │a table│
+-- ├───────┤
+-- │cell   │
+-- ╰───────╯
+-- >>> putBlock (list base ["a list"])
+-- • a list
+--
+-- Padding and margins are given as vertical then horizontal amounts, or
+-- per side:
+--
+-- >>> putBlock (render (border normalBorder <> padding 0 3) "wide")
+-- ┌──────────┐
+-- │   wide   │
+-- └──────────┘
+-- >>> putBlock (render (border normalBorder <> paddingLeft 4) "indented")
+-- ┌────────────┐
+-- │    indented│
+-- └────────────┘
+--
+-- Borders, and which of their sides are drawn:
+--
+-- >>> putBlock (render (border roundedBorder <> borderBottom False) "open below")
+-- ╭──────────╮
+-- │open below│
+--
+-- 'width' is the width with padding and border. The thing shrinks when
+-- there is less room:
+--
+-- >>> let note = render (width 24 <> border normalBorder) "Wraps to its width"
+-- >>> putBlock note
+-- ┌──────────────────────┐
+-- │Wraps to its width    │
+-- └──────────────────────┘
+-- >>> putBlock (fromGrid (layout (Just 14) note))
+-- ┌────────────┐
+-- │Wraps to its│
+-- │width       │
+-- └────────────┘
+--
+-- 'maxWidth' and 'maxHeight' crop the result:
+--
+-- >>> putBlock (render (border normalBorder <> maxWidth 6) "cropped")
+-- ┌─────
+-- │cropp
+-- └─────
+--
+-- Alignment of content in a box that is larger than it:
+--
+-- >>> putBlock (render (width 12 <> height 5 <> border normalBorder <> align right <> valign bottom) "corner")
+-- ┌──────────┐
+-- │          │
+-- │          │
+-- │    corner│
+-- └──────────┘
+--
+-- An @unset@ modifier undoes a setting made earlier:
+--
+-- >>> let boxed = border normalBorder <> padding 0 1
+-- >>> putBlock (render (boxed <> unsetBorder) "no border")
+--  no border
 module Lipstick.Mod
   ( Mod
   , HasBox
@@ -115,3 +190,6 @@ module Lipstick.Mod
   ) where
 
 import Lipstick.Internal.Mod
+
+-- $setup
+-- >>> import Lipstick

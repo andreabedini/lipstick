@@ -1,4 +1,24 @@
 -- | Placing a block in a larger area filled with whitespace.
+--
+-- == Examples
+--
+-- >>> let hi = render (border roundedBorder) "hi"
+-- >>> putBlock (place (width 16 <> height 5 <> align center <> valign center <> whitespaceChars "·") hi)
+-- ················
+-- ······╭──╮······
+-- ······│hi│······
+-- ······╰──╯······
+-- ················
+-- >>> putBlock (place (width 16 <> height 3 <> align right <> valign bottom <> whitespaceChars "·") hi)
+-- ············╭──╮
+-- ············│hi│
+-- ············╰──╯
+--
+-- Without a 'Lipstick.Mod.width', the area is as wide as the space it is
+-- laid out in:
+--
+-- >>> putBlock (fromGrid (layout (Just 20) (place (align center <> whitespaceChars "-") " centred ")))
+-- ----- centred ------
 module Lipstick.Place
   ( Place
   , place
@@ -12,6 +32,9 @@ import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), cropLayoutWidth, measureIn)
 import Lipstick.Internal.Types
 import Lipstick.Internal.Mod
+
+-- $setup
+-- >>> import Lipstick
 
 -- | The surrounding area: its size, where the block sits in it, and the
 -- characters of the whitespace. Its text attributes colour the whitespace
@@ -41,7 +64,10 @@ whitespaceChars t = fieldMod (\p -> p {placeChars = t})
 -- columns if set, and 'height' rows if set. A block larger than the area
 -- is left as it is in that direction.
 --
--- > place (align center <> valign center <> height 5) b
+-- >>> putBlock (place (width 7 <> height 3 <> align center <> valign center <> whitespaceChars ".") "b")
+-- .......
+-- ...b...
+-- .......
 place :: Mod Place -> Block -> Block
 place m b = Block $ \ctx -> placeNode m (measureIn ctx b)
 

@@ -2,6 +2,47 @@
 
 -- | Serialising blocks to text with ANSI escape sequences, and parsing
 -- such text back into styled 'Inline' text.
+--
+-- == Examples
+--
+-- A block as text with escape sequences, for a 'RenderEnv':
+--
+-- >>> let hi = render (bold <> fg "#F25D94") "hi"
+-- >>> toAnsi defaultRenderEnv hi
+-- "\ESC[0;1;38;2;242;93;148mhi\ESC[0m"
+-- >>> toAnsi defaultRenderEnv {envProfile = ANSI256} hi
+-- "\ESC[0;1;38;5;204mhi\ESC[0m"
+-- >>> toAnsi defaultRenderEnv {envProfile = ANSI16} hi
+-- "\ESC[0;1;35mhi\ESC[0m"
+-- >>> toAnsi defaultRenderEnv {envProfile = NoTTY} hi
+-- "hi"
+--
+-- Each line on its own, or without any escape sequences:
+--
+-- >>> toAnsiLines defaultRenderEnv (vcat [render (fg red) "hi", "there"])
+-- ["\ESC[0;31mhi\ESC[0m   ","there"]
+-- >>> renderPlain (vcat [render (fg red) "hi", "there"])
+-- "hi   \nthere"
+--
+-- The 'envWidth' is the width blocks are laid out in:
+--
+-- >>> renderPlain (render (border asciiBorder <> fillWidth) "hi")
+-- "+--+\n|hi|\n+--+"
+-- >>> toAnsi defaultRenderEnv {envProfile = NoTTY, envWidth = Just 10} (render (border asciiBorder <> fillWidth) "hi")
+-- "+--------+\n|hi      |\n+--------+"
+--
+-- Text that already has escape sequences, such as another program's
+-- output, becomes 'Inline' text with the same attributes:
+--
+-- >>> let report = fromAnsi "\ESC[1;32mok\ESC[0m 3 tests passed"
+-- >>> putBlock (render (border roundedBorder <> padding 0 1) report)
+-- ╭───────────────────╮
+-- │ ok 3 tests passed │
+-- ╰───────────────────╯
+-- >>> toAnsi defaultRenderEnv (fromInline report)
+-- "\ESC[0;1;32mok\ESC[0m 3 tests passed"
+-- >>> ansiWidth "\ESC[1;32mok\ESC[0m 3 tests passed"
+-- 17
 module Lipstick.Ansi
   ( RenderEnv (..)
   , defaultRenderEnv
@@ -24,6 +65,9 @@ import Lipstick.Color
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Block, layout)
 import Lipstick.Internal.Types
+
+-- $setup
+-- >>> import Lipstick
 
 -- | What the output can display.
 data RenderEnv = RenderEnv

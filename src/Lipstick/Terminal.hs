@@ -7,6 +7,57 @@
 -- otherwise assumed dark. To ask the terminal itself, which is slower and
 -- reads from stdin, detect the environment once with 'detectEnvQuery' and
 -- print with 'hPutBlockWith'.
+--
+-- == Examples
+--
+-- A program printing a block:
+--
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > import Lipstick
+-- >
+-- > main :: IO ()
+-- > main = putBlock (render (border roundedBorder <> padding 0 1) "Hello, kitty")
+--
+-- Asking the terminal for its background once, and printing several
+-- blocks for that environment:
+--
+-- > import System.IO (stdout)
+-- >
+-- > main :: IO ()
+-- > main = do
+-- >   env <- detectEnvQuery stdout
+-- >   hPutBlockWith env stdout (render (fg (lightDark "#5A3FC0" "#B39DFF")) "Hello")
+-- >   hPutBlockWith env stdout (render (fg (lightDark "#C02060" "#F25D94")) "kitty")
+--
+-- Printing for an environment given explicitly, here no escape sequences
+-- and 20 columns:
+--
+-- >>> import System.IO (stdout)
+-- >>> hPutBlockWith (RenderEnv NoTTY True (Just 20)) stdout (render (border normalBorder) "A block laid out in twenty columns")
+-- ┌──────────────────┐
+-- │A block laid out  │
+-- │in twenty columns │
+-- └──────────────────┘
+--
+-- The rules detection follows, given whether the handle is a terminal and
+-- the environment variables:
+--
+-- >>> profileFromEnv True [("TERM", "xterm-256color")]
+-- ANSI256
+-- >>> profileFromEnv True [("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]
+-- TrueColor
+-- >>> profileFromEnv True [("TERM", "xterm-256color"), ("NO_COLOR", "1")]
+-- Ascii
+-- >>> profileFromEnv False [("TERM", "xterm-256color")]
+-- NoTTY
+-- >>> profileFromEnv False [("TERM", "xterm-256color"), ("CLICOLOR_FORCE", "1")]
+-- ANSI256
+-- >>> backgroundFromEnv [("COLORFGBG", "15;0")]
+-- Just True
+-- >>> backgroundFromEnv [("COLORFGBG", "0;15")]
+-- Just False
+-- >>> widthFromEnv [("COLUMNS", "100")]
+-- Just 100
 module Lipstick.Terminal
   ( putBlock
   , hPutBlock
@@ -35,6 +86,10 @@ import System.Console.Terminal.Size (Window (..), hSize)
 import System.Environment (getEnvironment)
 import System.IO (Handle, hIsTerminalDevice, stdin, stdout)
 import System.Info (os)
+
+-- $setup
+-- >>> import Lipstick
+-- >>> import Lipstick.Terminal
 
 -- | Print a block to standard output, followed by a newline.
 putBlock :: Block -> IO ()

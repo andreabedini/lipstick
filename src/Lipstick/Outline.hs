@@ -6,12 +6,68 @@
 -- branch) and nested items indented below them. Trees have a root and use
 -- tree branches by default; lists have no root and use bullets.
 --
--- > tree (enumerator roundedTreeEnumerator <> enumeratorStyle (fg grey))
--- >   (Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" []], Node "BSD" []])
--- >
--- > list (enumerator arabic) ["Glossier", "Claire's Boutique", "Nyx"]
---
 -- Items are blocks, so anything can go in an outline, tables included.
+--
+-- == Examples
+--
+-- >>> let os = Node "." [Node "macOS" [], Node "Linux" [Node "NixOS" [], Node "Arch" []], Node "BSD" []]
+-- >>> putBlock (tree mempty os)
+-- .
+-- ├── macOS
+-- ├── Linux
+-- │   ├── NixOS
+-- │   └── Arch
+-- └── BSD
+-- >>> putBlock (tree (enumerator roundedTreeEnumerator) os)
+-- .
+-- ├── macOS
+-- ├── Linux
+-- │   ├── NixOS
+-- │   ╰── Arch
+-- ╰── BSD
+--
+-- >>> let shops = ["Glossier", "Claire's Boutique", "Nyx"]
+-- >>> putBlock (list mempty shops)
+-- • Glossier
+-- • Claire's Boutique
+-- • Nyx
+-- >>> putBlock (list (enumerator arabic) shops)
+-- 1. Glossier
+-- 2. Claire's Boutique
+-- 3. Nyx
+--
+-- Nested lists, with an enumerator for each depth:
+--
+-- >>> let products = [Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []], Node "Nyx" []]
+-- >>> putBlock (nestedList (enumerator (byDepth (\d -> if d == 0 then roman else dash))) products)
+--  I. Glossier
+--     - Cloud Paint
+--     - Boy Brow
+-- II. Nyx
+--
+-- Items wrap in the width left after their enumerator:
+--
+-- >>> putBlock (fromGrid (layout (Just 16) (list mempty ["A long item that wraps", "short"])))
+-- • A long item
+--   that wraps
+-- • short
+--
+-- Items can be styled by position, and are blocks themselves:
+--
+-- >>> putBlock (list (itemStyleWith (\p -> if isLast p then border roundedBorder else mempty)) ["one", "two", "last"])
+-- • one
+-- • two
+-- • ╭────╮
+--   │last│
+--   ╰────╯
+--
+-- An enumerator of your own:
+--
+-- >>> let arrows = Enumerator {enumMarker = const "→ ", enumIndent = const Nothing}
+-- >>> putBlock (list (enumerator arrows) shops)
+-- → Glossier
+-- → Claire's Boutique
+-- → Nyx
 module Lipstick.Outline
   ( Outline
   , tree
@@ -56,6 +112,9 @@ import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request
 import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
 import Lipstick.Internal.Mod
 import Lipstick.Style (Style, frame, render)
+
+-- $setup
+-- >>> import Lipstick
 
 -- | How items are marked.
 data Enumerator = Enumerator
@@ -246,7 +305,9 @@ enumeratorStyleWith f = fieldMod (\o -> o {outEnumStyle = \p -> outEnumStyle o p
 
 -- | Mark items with this enumerator.
 --
--- > nestedList (enumerator (byDepth (\d -> if d == 0 then roman else bullet))) items
+-- >>> putBlock (nestedList (enumerator (byDepth (\d -> if d == 0 then roman else bullet))) [Node "one" [Node "two" []]])
+-- I. one
+--    • two
 enumerator :: Enumerator -> Mod Outline
 enumerator e = fieldMod (\o -> o {outEnumerator = e})
 

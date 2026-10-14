@@ -10,6 +10,23 @@
 --
 -- The tables are generated from the Unicode Character Database by
 -- @scripts/GenUnicodeTable.hs@; see 'unicodeVersion'.
+--
+-- == Examples
+--
+-- >>> textWidth "hello"
+-- 5
+-- >>> textWidth "こんにちは"
+-- 10
+-- >>> textWidth "🇦🇺"
+-- 2
+-- >>> textWidth "e\x301"
+-- 1
+-- >>> map snd (clusters "a🇦🇺e\x301")
+-- [1,2,1]
+-- >>> (charWidth 'a', charWidth '你', charWidth '\x301')
+-- (1,2,0)
+-- >>> unicodeVersion
+-- "16.0.0"
 module Lipstick.Width
   ( charWidth
   , textWidth
@@ -18,3 +35,6 @@ module Lipstick.Width
   ) where
 
 import Lipstick.Internal.Width
+
+-- $setup
+-- >>> import Lipstick.Width

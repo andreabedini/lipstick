@@ -1,15 +1,52 @@
 -- | Compositing: blocks stacked on top of each other at any position.
 --
--- > compose
--- >   [ layer mempty background
--- >   , layer (offset 10 2 <> zIndex 1 <> layerId "dialog") dialog
--- >   ]
---
 -- Layers are drawn from the lowest 'zIndex' up; layers with the same
 -- 'zIndex' are drawn in list order, children after their parent. A layer
 -- hides what is below it, unless it is 'transparent'. Where a layer covers
 -- half of a wide character, the other half becomes a space, so columns
 -- never shift.
+--
+-- == Examples
+--
+-- >>> let background = place (width 26 <> height 6 <> whitespaceChars "╱") emptyBlock
+-- >>> let shadow = render (bg black <> width 16 <> height 3) ""
+-- >>> let dialog = render (border roundedBorder <> width 16 <> align center) "Really quit?"
+-- >>> let layers = [layer mempty background, layer (offset 6 2 <> zIndex 1) shadow, layer (offset 4 1 <> zIndex 2 <> layerId "dialog") dialog]
+-- >>> putBlock (compose layers)
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╭──────────────╮╱╱╱╱╱╱
+-- ╱╱╱╱│ Really quit? │  ╱╱╱╱
+-- ╱╱╱╱╰──────────────╯  ╱╱╱╱
+-- ╱╱╱╱╱╱                ╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+--
+-- Finding the named layer under a column and row, for mouse handling, and
+-- where a layer is:
+--
+-- >>> layerAt Nothing 8 2 layers
+-- Just "dialog"
+-- >>> layerAt Nothing 1 1 layers
+-- Nothing
+-- >>> findLayer Nothing "dialog" layers
+-- Just (Rect {rectX = 4, rectY = 1, rectWidth = 16, rectHeight = 3})
+--
+-- A 'transparent' layer shows what is below its unstyled spaces:
+--
+-- >>> let label = render (padding 0 2) "label"
+-- >>> putBlock (compose [layer mempty background, layer (offset 2 2) label])
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱  label  ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- >>> putBlock (compose [layer mempty background, layer (offset 2 2 <> transparent) label])
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱label╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
+-- ╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱
 module Lipstick.Layer
   ( Layer
   , layer
@@ -35,6 +72,9 @@ import Data.Text qualified as T
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, defTextStyle, measureIn, takenWidth, usableWidth)
 import Lipstick.Internal.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
+
+-- $setup
+-- >>> import Lipstick
 
 data Layer = Layer
   { layerX :: !Int

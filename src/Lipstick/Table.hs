@@ -1,12 +1,93 @@
--- | Tables.
+-- | Tables: a header row and body rows of blocks, with borders and rules
+-- between them.
 --
--- > table
--- >   (  border roundedBorder <> borderFg purple
--- >   <> headerStyle (bold <> align center)
--- >   <> cellStyle (\c -> padding 0 1 <> if maybe False even (cellRow c) then fg grey else mempty)
--- >   <> width 60 )
--- >   ["Language", "Formal", "Informal"]
--- >   [["Chinese", "您好", "你好"], ["Japanese", "こんにちは", "やあ"]]
+-- == Examples
+--
+-- The examples print with 'Lipstick.Terminal.putBlock'; the output is
+-- shown without colours and other attributes.
+--
+-- >>> let header = ["Language", "Formal", "Informal"]
+-- >>> let rows = [["Chinese", "您好", "你好"], ["Japanese", "こんにちは", "やあ"], ["Russian", "Здравствуйте", "Привет"]]
+-- >>> putBlock (table mempty header rows)
+-- ╭────────┬────────────┬────────╮
+-- │Language│Formal      │Informal│
+-- ├────────┼────────────┼────────┤
+-- │Chinese │您好        │你好    │
+-- │Japanese│こんにちは  │やあ    │
+-- │Russian │Здравствуйте│Привет  │
+-- ╰────────┴────────────┴────────╯
+--
+-- Styled cells, by position:
+--
+-- >>> let padded = cellStyle (const (padding 0 1))
+-- >>> let striped = cellStyle (\c -> if maybe False odd (cellRow c) then faint else mempty)
+-- >>> putBlock (table (padded <> striped <> headerStyle (bold <> align center)) header rows)
+-- ╭──────────┬──────────────┬──────────╮
+-- │ Language │    Formal    │ Informal │
+-- ├──────────┼──────────────┼──────────┤
+-- │ Chinese  │ 您好         │ 你好     │
+-- │ Japanese │ こんにちは   │ やあ     │
+-- │ Russian  │ Здравствуйте │ Привет   │
+-- ╰──────────┴──────────────┴──────────╯
+--
+-- Choosing the lines:
+--
+-- >>> putBlock (table (columnRules False <> rowRules True) header rows)
+-- ╭────────────────────────────╮
+-- │LanguageFormal      Informal│
+-- ├────────────────────────────┤
+-- │Chinese 您好        你好    │
+-- ├────────────────────────────┤
+-- │Japaneseこんにちは  やあ    │
+-- ├────────────────────────────┤
+-- │Russian ЗдравствуйтеПривет  │
+-- ╰────────────────────────────╯
+-- >>> putBlock (table (border markdownBorder <> borderTop False <> borderBottom False) header rows)
+-- |Language|Formal      |Informal|
+-- |--------|------------|--------|
+-- |Chinese |您好        |你好    |
+-- |Japanese|こんにちは  |やあ    |
+-- |Russian |Здравствуйте|Привет  |
+--
+-- Laid out in less width than it needs, a table shrinks its widest
+-- columns: body cells wrap, and header cells are cut short:
+--
+-- >>> putBlock (fromGrid (layout (Just 28) (table mempty header rows)))
+-- ╭────────┬──────────┬──────╮
+-- │Language│Formal    │Infor…│
+-- ├────────┼──────────┼──────┤
+-- │Chinese │您好      │你好  │
+-- │Japanese│こんにちは│やあ  │
+-- │Russian │Здравствуй│Привет│
+-- │        │те        │      │
+-- ╰────────┴──────────┴──────╯
+--
+-- With a 'height', rows that do not fit are replaced by a row of
+-- ellipses, and 'yOffset' scrolls:
+--
+-- >>> let numbers = [[text (T.pack (show n)), text (T.pack (show (n * n)))] | n <- [1 .. 20 :: Int]]
+-- >>> putBlock (table (height 8 <> yOffset 5) ["n", "n²"] numbers)
+-- ╭──┬───╮
+-- │n │n² │
+-- ├──┼───┤
+-- │6 │36 │
+-- │7 │49 │
+-- │8 │64 │
+-- │… │…  │
+-- ╰──┴───╯
+-- >>> visibleRows Nothing (height 8 <> yOffset 5) ["n", "n²"] numbers
+-- Just (5,7)
+--
+-- Cells are blocks, so they can hold anything:
+--
+-- >>> putBlock (table mempty ["Tool", "Platforms"] [["GHC", list mempty ["Linux", "macOS", "Windows"]]])
+-- ╭────┬─────────╮
+-- │Tool│Platforms│
+-- ├────┼─────────┤
+-- │GHC │• Linux  │
+-- │    │• macOS  │
+-- │    │• Windows│
+-- ╰────┴─────────╯
 module Lipstick.Table
   ( Table
   , table
@@ -33,6 +114,10 @@ import Lipstick.Internal.Types (Attrs (..))
 import Lipstick.Internal.Mod
 import Lipstick.Style (Style, frame)
 import Lipstick.Width (textWidth)
+
+-- $setup
+-- >>> import Lipstick
+-- >>> import Data.Text qualified as T
 
 -- | Where a cell is: in the header, or in a body row (counting from 0).
 data TableCell = HeaderCell !Int | BodyCell !Int !Int
