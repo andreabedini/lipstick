@@ -6,20 +6,19 @@ module Lipstick.Ansi
   ( RenderEnv (..)
   , defaultRenderEnv
   , toAnsi
+  , toAnsiLines
   , renderPlain
   , fromAnsi
   , ansiWidth
   , ansiHeight
   ) where
 
+import Data.Array (Array, listArray, (!))
 import Data.Char (isDigit)
-import Data.List (intersperse)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Lazy qualified as TL
-import Data.Text.Lazy.Builder (Builder)
-import Data.Text.Lazy.Builder qualified as B
+import Data.Word (Word8)
 import Lipstick.Color
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
@@ -38,8 +37,12 @@ defaultRenderEnv = RenderEnv TrueColor True
 -- | The block's lines, separated by newlines, without a trailing newline.
 -- Attributes are reset at the end of every line.
 toAnsi :: RenderEnv -> Grid -> Text
-toAnsi env b =
-  TL.toStrict (B.toLazyText (mconcat (intersperse (B.singleton '\n') (map (renderLine env) (gridLines b)))))
+toAnsi env = T.intercalate (T.singleton '\n') . toAnsiLines env
+
+-- | The block's lines, each with its own escape sequences: attributes are
+-- reset and hyperlinks closed at the end of every line.
+toAnsiLines :: RenderEnv -> Grid -> [Text]
+toAnsiLines env = map (T.concat . renderLine env) . gridLines
 
 -- | The block as plain text, without any escape sequences.
 renderPlain :: Grid -> Text
@@ -78,28 +81,30 @@ resolveAttrs (RenderEnv p dark) a =
     on f = fromMaybe False (f a)
     ul = fromMaybe NoUnderline (attrUnderline a)
 
-renderLine :: RenderEnv -> Line -> Builder
+-- | The pieces of a line: span texts and escape sequences, to be joined
+-- with one 'T.concat'.
+renderLine :: RenderEnv -> Line -> [Text]
 renderLine env = go plainSGR Nothing . lineSpans
   where
     go cur lnk [] =
-      (if cur /= plainSGR then sgrCode plainSGR else mempty) <> maybe mempty (const closeLink) lnk
+      [sgrCode plainSGR | cur /= plainSGR] ++ [closeLink | Just _ <- [lnk]]
     go cur lnk (Span a t _ : rest) =
       let (sgr, lnk') = resolveAttrs env a
           linkB
-            | lnk' == lnk = mempty
-            | otherwise = maybe mempty (const closeLink) lnk <> maybe mempty openLink lnk'
-          sgrB = if sgr == cur then mempty else sgrCode sgr
-       in linkB <> sgrB <> B.fromText t <> go sgr lnk' rest
+            | lnk' == lnk = []
+            | otherwise = [closeLink | Just _ <- [lnk]] ++ [openLink u | Just u <- [lnk']]
+          sgrB = [sgrCode sgr | sgr /= cur]
+       in linkB ++ sgrB ++ t : go sgr lnk' rest
 
-openLink :: Text -> Builder
-openLink url = "\ESC]8;;" <> B.fromText (escapeUri url) <> "\ESC\\"
+openLink :: Text -> Text
+openLink url = T.concat ["\ESC]8;;", escapeUri url, "\ESC\\"]
 
-closeLink :: Builder
+closeLink :: Text
 closeLink = "\ESC]8;;\ESC\\"
 
 -- | A complete SGR sequence: reset, then every active attribute.
-sgrCode :: SGR -> Builder
-sgrCode s = "\ESC[" <> mconcat (intersperse ";" (map B.fromString ("0" : params))) <> "m"
+sgrCode :: SGR -> Text
+sgrCode s = T.concat ["\ESC[", T.intercalate ";" ("0" : params), "m"]
   where
     params =
       concat
@@ -121,17 +126,24 @@ sgrCode s = "\ESC[" <> mconcat (intersperse ";" (map B.fromString ("0" : params)
       CurlyUnderline -> ["4:3"]
       DottedUnderline -> ["4:4"]
       DashedUnderline -> ["4:5"]
-    colorParams :: Int -> Int -> String -> TermColor -> [String]
+    colorParams :: Word8 -> Word8 -> Text -> TermColor -> [Text]
     colorParams base brightBase ext = \case
       TC16 n
-        | n < 8 -> [show (base + fromIntegral n)]
-        | otherwise -> [show (brightBase + fromIntegral n - 8)]
-      TC256 n -> [ext, "5", show n]
-      TCRGB r g b -> [ext, "2", show r, show g, show b]
+        | n < 8 -> [decimal (base + n)]
+        | otherwise -> [decimal (brightBase + n - 8)]
+      TC256 n -> [ext, "5", decimal n]
+      TCRGB r g b -> [ext, "2", decimal r, decimal g, decimal b]
     ulColorParams = \case
-      TC16 n -> ["58", "5", show n]
-      TC256 n -> ["58", "5", show n]
-      TCRGB r g b -> ["58", "2", show r, show g, show b]
+      TC16 n -> ["58", "5", decimal n]
+      TC256 n -> ["58", "5", decimal n]
+      TCRGB r g b -> ["58", "2", decimal r, decimal g, decimal b]
+
+-- | A byte in decimal, from a table: SGR parameters are all bytes.
+decimal :: Word8 -> Text
+decimal = (numbers !)
+  where
+    numbers :: Array Word8 Text
+    numbers = listArray (0, 255) [T.pack (show i) | i <- [0 :: Int .. 255]]
 
 -- Parsing ---------------------------------------------------------------------
 

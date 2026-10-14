@@ -230,6 +230,7 @@ module Lipstick
   , RenderEnv (..)
   , defaultRenderEnv
   , toAnsi
+  , toAnsiLines
   , renderPlain
   , putBlock
   , hPutBlock

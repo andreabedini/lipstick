@@ -43,13 +43,16 @@ hPutBlock h b = do
   hPutBlockWith env h b
 
 -- | Print a block to a handle, followed by a newline, for a known
--- environment.
+-- environment. Lines are written one at a time, so the whole output is
+-- never held as one text.
 --
 -- The output is always UTF-8, whatever the handle's encoding: terminals
 -- expect it, and a locale such as @C@ (common in containers and cron jobs)
 -- would otherwise make the handle reject box-drawing characters.
 hPutBlockWith :: RenderEnv -> Handle -> Grid -> IO ()
-hPutBlockWith env h b = Utf8.hPutStrLn h (toAnsi env b)
+hPutBlockWith env h b = case toAnsiLines env b of
+  [] -> Utf8.hPutStrLn h mempty
+  ls -> mapM_ (Utf8.hPutStrLn h) ls
 
 -- | The colour profile of a handle, and whether the background is dark
 -- according to @COLORFGBG@ (dark if it is not set). Does not talk to the

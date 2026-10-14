@@ -726,6 +726,11 @@ ansiTests =
     , testProperty "escaped URIs are printable ASCII, and escaping is idempotent" $ \s ->
         let u = escapeUri (T.pack s)
          in T.all (\c -> c > ' ' && c < '\DEL') u .&&. escapeUri u === u
+    , testCase "every line resets attributes and closes links" $
+        toAnsiLines defaultRenderEnv (render (link "u" <> bold) "a\nb")
+          @?= [ "\ESC]8;;u\ESC\\\ESC[0;1ma\ESC[0m\ESC]8;;\ESC\\"
+              , "\ESC]8;;u\ESC\\\ESC[0;1mb\ESC[0m\ESC]8;;\ESC\\"
+              ]
     , testCase "output is UTF-8 whatever the handle's encoding" $ do
         dir <- getTemporaryDirectory
         (path, h) <- openTempFile dir "lipstick.txt"
