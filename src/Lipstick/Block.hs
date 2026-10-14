@@ -44,15 +44,15 @@ import Lipstick.Mod (Mod, Props (..), propsOf, runMod)
 
 -- | The natural width of a block: as wide as it is with nothing wrapped.
 blockWidth :: Block -> Int
-blockWidth = reqMax . blockRequest
+blockWidth = reqMax . blockRequest . measure
 
 -- | The height of a block at its natural width.
 blockHeight :: Block -> Int
-blockHeight b = snd (blockLayout b (Assign (blockWidth b) 0))
+blockHeight b = snd (blockLayout (measure b) (Assign (blockWidth b) 0))
 
 -- | The narrowest a block can be laid out without breaking words.
 blockMinWidth :: Block -> Int
-blockMinWidth = reqMin . blockRequest
+blockMinWidth = reqMin . blockRequest . measure
 
 -- | Unstyled text; lines are split on newlines, and wrap to the width the
 -- block is given.
@@ -77,9 +77,14 @@ styled m t = Inline [(propAttrs (snd (runMod m mempty)), t)]
 -- ('top', 'center', 'bottom'); blocks that 'Lipstick.Mod.stretchHeight'
 -- grow to the tallest instead.
 joinHorizontal :: Position -> [Block] -> Block
-joinHorizontal p bs = Block req run
+joinHorizontal p bs = Block $ \ctx ->
+  let ns = map (measureIn ctx) bs
+      rs = map blockRequest ns
+   in rowNode p ns rs
+
+rowNode :: Position -> [Measured] -> [Request] -> Measured
+rowNode p ns rs = Measured req run
   where
-    rs = map blockRequest bs
     req =
       Request
         { reqMin = sum (map reqMin rs)
@@ -87,6 +92,7 @@ joinHorizontal p bs = Block req run
         , reqGrow = sum (map reqGrow rs)
         , reqLimit = addLimits rs
         , reqStretch = any reqStretch rs
+        , reqFill = False
         }
     run (Assign w h) = (fitWidth w (joinGridsH p (map fst results)), natural)
       where
@@ -94,7 +100,7 @@ joinHorizontal p bs = Block req run
         -- The row height goes into the calls that give the natural heights
         -- it is computed from: a block's natural height never depends on
         -- the height it is asked to stretch to.
-        results = [blockLayout b (Assign bw rowH) | (b, bw) <- zip bs ws]
+        results = [blockLayout n (Assign bw rowH) | (n, bw) <- zip ns ws]
         natural = maximum (0 : map snd results)
         rowH = if reqStretch req then max h natural else natural
 
@@ -102,9 +108,14 @@ joinHorizontal p bs = Block req run
 -- (all of it if it grows without a limit); the position aligns those horizontally ('left',
 -- 'center', 'right').
 joinVertical :: Position -> [Block] -> Block
-joinVertical p bs = Block req run
+joinVertical p bs = Block $ \ctx ->
+  let ns = map (measureIn ctx) bs
+      rs = map blockRequest ns
+   in columnNode p ns rs
+
+columnNode :: Position -> [Measured] -> [Request] -> Measured
+columnNode p ns rs = Measured req run
   where
-    rs = map blockRequest bs
     req =
       Request
         { reqMin = maximum (0 : map reqMin rs)
@@ -112,10 +123,11 @@ joinVertical p bs = Block req run
         , reqGrow = maximum (0 : map reqGrow rs)
         , reqLimit = maxLimit rs
         , reqStretch = False
+        , reqFill = False
         }
     run (Assign w _) = (joinGridsV p w (map fst results), sum (map snd results))
       where
-        results = [blockLayout b (Assign (takenWidth r w) 0) | (b, r) <- zip bs rs]
+        results = [blockLayout n (Assign (takenWidth r w) 0) | (n, r) <- zip ns rs]
 
 -- | Side by side, aligned to the top.
 hcat :: [Block] -> Block

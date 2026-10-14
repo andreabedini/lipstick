@@ -33,7 +33,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), takenWidth, usableWidth)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, defTextStyle, measureIn, takenWidth, usableWidth)
 import Lipstick.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
 
 data Layer = Layer
@@ -93,48 +93,50 @@ data Slot = Start !Cell | Continued
 -- | Draw layers onto a canvas just big enough for all of them, or as wide
 -- as the space it is laid out in if a layer grows.
 compose :: [Layer] -> Block
-compose layers = Block req run
-  where
-    flat = flatten layers
-    req = canvasRequest flat
-    run (Assign w _) =
-      let g = fitWidth w (canvas w (drawLayers w flat))
-       in (g, gridHeight g)
+compose layers = Block $ \ctx -> Measured (canvasRequest (measured ctx layers)) $ \(Assign w _) ->
+  let g = fitWidth w (canvas w (drawLayers w (measured ctx layers)))
+   in (g, gridHeight g)
+
+-- | Absolute layers, in drawing order, with their blocks in inherited text
+-- settings.
+measured :: TextStyle -> [Layer] -> [(Layer, Measured)]
+measured ctx layers = [(l, measureIn ctx (layerBlock l)) | l <- flatten layers]
 
 -- | What a canvas of layers asks for: room for each layer to the right of
 -- its column.
-canvasRequest :: [Layer] -> Request
-canvasRequest flat =
+canvasRequest :: [(Layer, Measured)] -> Request
+canvasRequest ls =
   Request
     { reqMin = maximum (0 : [max 0 (layerX l + reqMin r) | (l, r) <- rs])
     , reqMax = maximum (0 : [max 0 (layerX l + reqMax r) | (l, r) <- rs])
     , reqGrow = maximum (0 : map (reqGrow . snd) rs)
     , reqLimit = maximum . (0 :) <$> traverse (\(l, r) -> (layerX l +) <$> usableWidth r) rs
     , reqStretch = False
+    , reqFill = False
     }
   where
-    rs = [(l, layerRequest l) | l <- flat]
+    rs = [(l, layerRequest l m) | (l, m) <- ls]
 
 -- | A layer's request, within its 'Lipstick.Mod.maxWidth' crop.
-layerRequest :: Layer -> Request
-layerRequest l =
-  let r = blockRequest (layerBlock l)
+layerRequest :: Layer -> Measured -> Request
+layerRequest l m =
+  let r = blockRequest m
       cap x = maybe x (min x . max 0) (propMaxWidth (layerProps l))
    in r {reqMin = cap (reqMin r), reqMax = cap (reqMax r), reqLimit = cap <$> reqLimit r}
 
 -- | Absolute layers laid out in a canvas width: each takes what it needs
 -- of the columns to its right.
-drawLayers :: Int -> [Layer] -> [(Layer, Grid)]
-drawLayers w flat =
-  [ (l, withProps (layerProps l) (gridCells (fst (blockLayout (layerBlock l) (Assign lw 0)))))
-  | l <- flat
-  , let lw = takenWidth (layerRequest l) (w - layerX l)
+drawLayers :: Int -> [(Layer, Measured)] -> [(Layer, Grid)]
+drawLayers w ls =
+  [ (l, withProps (layerProps l) (gridCells (fst (blockLayout m (Assign lw 0)))))
+  | (l, m) <- ls
+  , let lw = takenWidth (layerRequest l m) (w - layerX l)
   ]
 
 -- | The width a canvas of layers takes in an available width, as for
 -- 'Lipstick.Block.layout'.
-canvasWidth :: Maybe Int -> [Layer] -> Int
-canvasWidth avail flat = let r = canvasRequest flat in maybe (reqMax r) (takenWidth r) avail
+canvasWidth :: Maybe Int -> [(Layer, Measured)] -> Int
+canvasWidth avail ls = let r = canvasRequest ls in maybe (reqMax r) (takenWidth r) avail
 
 canvas :: Int -> [(Layer, Grid)] -> Grid
 canvas w drawn = fromCellLines [row r | r <- [0 .. h - 1]]
@@ -149,7 +151,7 @@ canvas w drawn = fromCellLines [row r | r <- [0 .. h - 1]]
           | otherwise = case Map.lookup (r, c) painted of
               Just (Start cell) -> cell : go (c + max 1 (cellWidth cell))
               _ -> blank : go (c + 1)
-    blank = Cell mempty (T.singleton ' ') 1
+    blank = Cell mempty (T.singleton ' ') 1 False
 
 -- | Draw one block on top of another, at a column and row.
 overlay :: Int -> Int -> Block -> Block -> Block
@@ -207,7 +209,7 @@ paintLayer painted (l, g) = foldl paintRow painted (zip [layerY l ..] (gridCells
             acc
             [from .. from + n - 1]
 
-    spaceLike cell = Cell (cellAttrs cell) (T.singleton ' ') 1
+    spaceLike cell = Cell (cellAttrs cell) (T.singleton ' ') 1 (cellFill cell)
     isBlank cell = cellText cell == T.singleton ' ' && cellAttrs cell == mempty
 
 -- | Where a layer is drawn, in canvas columns and rows.
@@ -229,8 +231,8 @@ contains x y (Rect rx ry w h) = x >= rx && x < rx + w && y >= ry && y < ry + h
 -- ('Nothing' for its natural width), topmost first.
 topmostFirst :: Maybe Int -> [Layer] -> [(Layer, Grid)]
 topmostFirst avail layers =
-  let flat = flatten layers
-   in reverse (drawLayers (canvasWidth avail flat) flat)
+  let ls = measured defTextStyle layers
+   in reverse (drawLayers (canvasWidth avail ls) ls)
 
 -- | The topmost named layer covering a column and row, for mouse handling,
 -- with the layers composed in an available width ('Nothing' for their

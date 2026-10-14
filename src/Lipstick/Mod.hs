@@ -191,7 +191,7 @@ propsOf (Mod _ g) = g defProps
 -- | What most builders do with the properties: lay the attributes under
 -- everything, then crop.
 withProps :: Props -> [[Cell]] -> Grid
-withProps p = cropToProps p . overCellAttrs (propAttrs p <>)
+withProps p = cropToProps p . underlay (propAttrs p) (fillAttrs (propAttrs p))
 
 -- | Crop lines to 'maxWidth' and 'maxHeight'.
 cropToProps :: Props -> [[Cell]] -> Grid

@@ -9,7 +9,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), cropLayoutWidth)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), cropLayoutWidth, measureIn)
 import Lipstick.Internal.Types
 import Lipstick.Mod
 
@@ -43,10 +43,13 @@ whitespaceChars t = fieldMod (\p -> p {placeChars = t})
 --
 -- > place (align center <> valign center <> height 5) b
 place :: Mod Place -> Block -> Block
-place m b = Block req run
+place m b = Block $ \ctx -> placeNode m (measureIn ctx b)
+
+placeNode :: Mod Place -> Measured -> Measured
+placeNode m nb = Measured req run
   where
     (Place (Size wSet hSet weight stretch) (Align ah av) chars, props) = runMod m defPlace
-    r = blockRequest b
+    r = blockRequest nb
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     capH x = maybe x (min x . max 0) (propMaxHeight props)
     req =
@@ -57,11 +60,12 @@ place m b = Block req run
           reqGrow = maybe (max 1 weight) (const weight) wSet
         , reqLimit = max 0 <$> propMaxWidth props
         , reqStretch = stretch
+        , reqFill = False
         }
     run (Assign w h) = (fitWidth w (withProps props ls), natural)
       where
         outerW = cropLayoutWidth (propMaxWidth props) (reqGrow req) (maybe (reqMax r) (max (reqMax r)) wSet) w
-        (g, n) = blockLayout b (Assign (if reqGrow r > 0 then outerW else min outerW (reqMax r)) outerH)
+        (g, n) = blockLayout nb (Assign (if reqGrow r > 0 then outerW else min outerW (reqMax r)) outerH)
         natural = capH (max (fromMaybe 0 hSet) n)
         -- From the child's natural height, not its grid's: the grid is
         -- laid out with this height, for a child that stretches.

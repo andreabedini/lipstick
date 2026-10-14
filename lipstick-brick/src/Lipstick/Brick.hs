@@ -24,7 +24,7 @@ import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), layout, resolveColor)
 import Lipstick.Internal.Grid (Grid (..), Span (..), lineSpans)
-import Lipstick.Internal.Layout (Block (..), Request (..))
+import Lipstick.Internal.Layout (Measured (..), Request (..), measure)
 import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
 -- | A widget showing a block, laid out in the width brick makes available
@@ -35,7 +35,7 @@ blockWidget env b = Widget policy Fixed $ do
   ctx <- getContext
   render (raw (blockImage env {envWidth = Just (ctx ^. availWidthL)} b))
   where
-    policy = if reqGrow (blockRequest b) > 0 then Greedy else Fixed
+    policy = if reqGrow (blockRequest (measure b)) > 0 then Greedy else Fixed
 
 -- | A vty image of a block, laid out in the environment's 'envWidth', and
 -- exactly as wide and tall as the laid-out block. vty has

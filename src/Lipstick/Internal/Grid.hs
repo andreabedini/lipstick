@@ -30,6 +30,8 @@ module Lipstick.Internal.Grid
   , wordWidths
   , truncateCells
   , overCellAttrs
+  , underlay
+  , alignText
 
     -- * Inline text
   , Inline (..)
@@ -81,6 +83,9 @@ data Cell = Cell
   { cellAttrs :: !Attrs
   , cellText :: !Text
   , cellWidth :: !Int
+  , cellFill :: !Bool
+  -- ^ whitespace that aligns text: an enclosing style gives it only its
+  -- background (and reverse video), as it does for padding
   }
   deriving (Eq, Show)
 
@@ -128,7 +133,7 @@ cellsLine :: [Cell] -> Line
 cellsLine cs = Line (cellsWidth cs) cs
 
 blankCells :: Attrs -> Int -> [Cell]
-blankCells a n = replicate n (Cell a (T.singleton ' ') 1)
+blankCells a n = replicate n (Cell a (T.singleton ' ') 1 False)
 
 -- | Exactly @n@ columns made by repeating the clusters of a text. Clusters
 -- that would overflow, and an empty text, give spaces instead.
@@ -139,7 +144,7 @@ fillCells a t n = case filter ((> 0) . snd) (clusters t) of
   where
     go k ((c, w) : rest)
       | k <= 0 = []
-      | w <= k = Cell a c w : go (k - w) rest
+      | w <= k = Cell a c w False : go (k - w) rest
     go k _ = blankCells a k
 
 -- | Pad a line with blanks to @n@ columns, placing the content at a
@@ -234,7 +239,7 @@ truncateCells w cs
           a = case reverse kept of
             c : _ -> cellAttrs c
             [] -> maybe mempty cellAttrs (safeHead cs)
-       in kept ++ [Cell a (T.singleton '…') 1]
+       in kept ++ [Cell a (T.singleton '…') 1 False]
   where
     safeHead xs = case xs of
       x : _ -> Just x
@@ -242,6 +247,23 @@ truncateCells w cs
 
 overCellAttrs :: (Attrs -> Attrs) -> [[Cell]] -> [[Cell]]
 overCellAttrs f = map (map (\c -> c {cellAttrs = f (cellAttrs c)}))
+
+-- | Lay attributes under lines: the given ones under content, and the
+-- fill ones under the whitespace that aligns text.
+underlay :: Attrs -> Attrs -> [[Cell]] -> [[Cell]]
+underlay base fill = map (map under)
+  where
+    under c
+      | cellFill c = c {cellAttrs = fill <> cellAttrs c}
+      | otherwise = c {cellAttrs = base <> cellAttrs c}
+
+-- | Pad a line of text to @n@ columns at a position, with whitespace that
+-- enclosing styles treat as fill.
+alignText :: Position -> Int -> [Cell] -> [Cell]
+alignText p n cs =
+  let (before, after) = splitExtra p (n - cellsWidth cs)
+      gap k = replicate k (Cell mempty (T.singleton ' ') 1 True)
+   in gap before ++ cs ++ gap after
 
 -- | Text with inline styling, possibly spanning several lines.
 newtype Inline = Inline [(Attrs, Text)]
@@ -264,7 +286,7 @@ inlineLines tabWidth (Inline segs) = splitLines (styledClusters [(a, sanitise t)
     -- Drop C0 and C1 controls (and DEL): they could start escape sequences.
     isKept c = c == '\n' || (c >= ' ' && (c < '\DEL' || c > '\x9F'))
     isNewline (_, c, _) = c == T.singleton '\n'
-    cells cs = [Cell a c w | (a, c, w) <- cs]
+    cells cs = [Cell a c w False | (a, c, w) <- cs]
     splitLines xs = case break isNewline xs of
       (cs, []) -> [cells cs]
       (cs, _ : rest) -> cells cs : splitLines rest

@@ -51,7 +51,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Tree (Forest, Tree (..))
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), cropLayoutWidth, layout, takenWidth)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, cropLayoutWidth, layoutIn, measureIn, takenWidth)
 import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
 import Lipstick.Mod
 import Lipstick.Style (Style, frame, render)
@@ -111,11 +111,11 @@ listDefaults = treeDefaults {outEnumerator = const bullet}
 tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
   let (o, props) = runMod m treeDefaults
-   in outline o props (Entry [] [] [] (fillOf (outRootStyle o)) (frame (outRootStyle o) root) : items o 0 [] kids)
+   in outline o props $ \ctx -> Entry [] [] [] (fillOf (outRootStyle o)) (frame (outRootStyle o) root) : items ctx o 0 [] kids
 
 -- | Trees without a common root, with tree branches.
 forest :: Mod Outline -> Forest Block -> Block
-forest m kids = let (o, props) = runMod m treeDefaults in outline o props (items o 0 [] kids)
+forest m kids = let (o, props) = runMod m treeDefaults in outline o props (\ctx -> items ctx o 0 [] kids)
 
 -- | A list of items, with bullets.
 list :: Mod Outline -> [Block] -> Block
@@ -123,7 +123,7 @@ list m = nestedList m . map (`Node` [])
 
 -- | A list whose items can have nested items, with bullets.
 nestedList :: Mod Outline -> Forest Block -> Block
-nestedList m kids = let (o, props) = runMod m listDefaults in outline o props (items o 0 [] kids)
+nestedList m kids = let (o, props) = runMod m listDefaults in outline o props (\ctx -> items ctx o 0 [] kids)
 
 -- | An item of an outline, flattened: what goes before its lines, and the
 -- item itself, laid out in the width that is left.
@@ -146,24 +146,26 @@ prefixWidth e = cellsWidth (entryOuter e) + max (cellsWidth (entryMarker e)) (ce
 -- | Entries laid out in the width they are given, padded to it (each line
 -- with its item's fill attributes) and to the height, with the common
 -- properties on top.
-outline :: Outline -> Props -> [Entry] -> Block
-outline o props entries = Block req run
+outline :: Outline -> Props -> (TextStyle -> [Entry]) -> Block
+outline o props entriesIn = Block $ \ctx -> outlineNode o props [(e, measureIn ctx (entryBlock e)) | e <- entriesIn ctx]
+
+outlineNode :: Outline -> Props -> [(Entry, Measured)] -> Measured
+outlineNode o props entries = Measured req run
   where
     Size wSet hSet weight _ = outSize o
-    natural = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMax (blockRequest (entryBlock e)) | e <- entries])
-    smallest = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMin (blockRequest (entryBlock e)) | e <- entries])
+    natural = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])
+    smallest = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     capH x = maybe x (min x . max 0) (propMaxHeight props)
-    req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False
+    req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False False
     run (Assign w _) = (fitWidth w (withProps props tall), capH (max (fromMaybe 0 hSet) (sum (map snd laid))))
       where
         wide = cropLayoutWidth (propMaxWidth props) weight natural w
         laid = map entryLines entries
         padded = [alignCells a left wide l | (ls, _) <- laid, (a, l) <- ls]
         tall = padded ++ replicate (fromMaybe 0 hSet - length padded) (blankCells mempty wide)
-        entryLines e =
-          let b = entryBlock e
-              (g, n) = blockLayout b (Assign (takenWidth (blockRequest b) (wide - prefixWidth e)) 0)
+        entryLines (e, node) =
+          let (g, n) = blockLayout node (Assign (takenWidth (blockRequest node) (wide - prefixWidth e)) 0)
               body = case gridCells g of
                 [] -> [[]]
                 ls -> ls
@@ -177,8 +179,8 @@ fillOf = fillAttrs . propAttrs . propsOf
 
 -- | The entries of a level of items, below the indentation of the levels
 -- above.
-items :: Outline -> Int -> [Cell] -> Forest Block -> [Entry]
-items o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
+items :: TextStyle -> Outline -> Int -> [Cell] -> Forest Block -> [Entry]
+items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
   where
     kids =
       if depth == 0
@@ -187,7 +189,7 @@ items o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
     n = length kids
     e = outEnumerator o depth
     pos i = ItemPos depth i n
-    styledLine m t = concat (take 1 (gridCells (layout Nothing (render m (plain t)))))
+    styledLine m t = concat (take 1 (gridCells (layoutIn ctx Nothing (render m (plain t)))))
     enumStyle i = outEnumStyle o (pos i)
     indentStyle i = maybe (enumStyle i) ($ pos i) (outIndentStyle o)
     markers = [styledLine (enumStyle i) (enumMarker e n i) | i <- [0 .. n - 1]]
@@ -201,7 +203,7 @@ items o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
           indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
           itemStyle' = outItemStyle o (pos i)
        in Entry outer marker indent (fillOf itemStyle') (frame itemStyle' b)
-            : items o (depth + 1) (outer ++ indent) children
+            : items ctx o (depth + 1) (outer ++ indent) children
 
 -- Styling ---------------------------------------------------------------------
 

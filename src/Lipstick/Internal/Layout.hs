@@ -1,7 +1,9 @@
 -- | Laying out blocks at a width. Not part of the stable API.
 --
--- A 'Block' is laid out in one pass that goes down the tree and back up.
--- Going up, every block reports a 'Request': its smallest and natural
+-- A 'Block' is first given the text settings it inherits ('TextStyle'),
+-- which can change what it measures, and becomes a 'Measured'. A tree of
+-- nodes is laid out in one pass that goes down the tree and back up.
+-- Going up, every node reports a 'Request': its smallest and natural
 -- width, which depend only on its content, and, from 'blockLayout', its
 -- natural height at the width it was given. Going down, a parent shares
 -- its width among its children with 'allocate' and tells children that
@@ -17,9 +19,15 @@
 module Lipstick.Internal.Layout
   ( -- * Blocks
     Block (..)
+  , Measured (..)
+  , measureIn
+  , measure
+  , TextStyle (..)
+  , defTextStyle
   , Request (..)
   , Assign (..)
   , layout
+  , layoutIn
   , fromGrid
   , emptyBlock
   , textBlock
@@ -35,16 +43,50 @@ module Lipstick.Internal.Layout
   ) where
 
 import Data.String (IsString (..))
+import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
+import Lipstick.Internal.Types (Position, left)
 
--- | Styled content that can be laid out at any width.
-data Block = Block
+-- | Styled content that can be laid out at any width, once it knows the
+-- text settings it inherits.
+newtype Block = Block (TextStyle -> Measured)
+
+-- | A block with its inherited text settings applied.
+data Measured = Measured
   { blockRequest :: Request
   , blockLayout :: Assign -> (Grid, Int)
   -- ^ the grid, exactly 'assignWidth' wide, and the natural height at
   -- that width (the grid is taller only when the block stretches)
   }
+
+-- | Text settings that nested text inherits, as in CSS: set on a style,
+-- they apply to all the text inside what it frames, unless something
+-- nearer sets them again. They are known before anything is measured,
+-- since some of them change widths.
+data TextStyle = TextStyle
+  { textAlign :: !Position
+  , textWrap :: !Bool
+  -- ^ wrap lines, or cut them short with an ellipsis
+  , textBreaks :: ![Char]
+  -- ^ characters to also break lines after
+  , textTabWidth :: !Int
+  , textTransform :: !(Maybe (Text -> Text))
+  , textInline :: !Bool
+  -- ^ newlines removed, never wrapped
+  }
+
+-- | Left-aligned, wrapping text with four-column tabs.
+defTextStyle :: TextStyle
+defTextStyle = TextStyle left True [] 4 Nothing False
+
+-- | A block in inherited text settings.
+measureIn :: TextStyle -> Block -> Measured
+measureIn ctx (Block f) = f ctx
+
+-- | A block in the default text settings.
+measure :: Block -> Measured
+measure = measureIn defTextStyle
 
 -- | What a block asks of its parent. Lazy, and independent of the
 -- assignment.
@@ -59,6 +101,10 @@ data Request = Request
   -- ^ the most it can use when it grows; 'Nothing' for no limit
   , reqStretch :: Bool
   -- ^ whether the block grows to the height of its row
+  , reqFill :: Bool
+  -- ^ whether it takes the whole width of a box it is framed in, so the
+  -- box's alignment applies to its lines (text), rather than what it
+  -- needs, the box aligning it as a whole (boxes, rows)
   }
 
 -- | What a parent gives a block. Lazy: 'assignHeight' can depend on the
@@ -76,9 +122,14 @@ instance IsString Block where
 -- | Lay a block out in an available width: its natural width when there is
 -- no limit, and otherwise as much as it needs (all of it if it grows).
 layout :: Maybe Int -> Block -> Grid
-layout avail b = fst (blockLayout b (Assign w 0))
+layout = layoutIn defTextStyle
+
+-- | Like 'layout', in inherited text settings.
+layoutIn :: TextStyle -> Maybe Int -> Block -> Grid
+layoutIn ctx avail b = fst (blockLayout n (Assign w 0))
   where
-    r = blockRequest b
+    n = measureIn ctx b
+    r = blockRequest n
     w = maybe (reqMax r) (takenWidth r) avail
 
 -- | How much of an available width a block takes, when it does not have to
@@ -105,27 +156,38 @@ usableWidth r
   | reqGrow r > 0 = max (reqMax r) <$> reqLimit r
   | otherwise = Just (reqMax r)
 
--- | A grid as a block: cropped or padded to the width it is given.
+-- | A grid as a block: cropped or padded to the width it is given. It
+-- inherits nothing.
 fromGrid :: Grid -> Block
 fromGrid g =
-  Block
-    (Request (gridWidth g) (gridWidth g) 0 Nothing False)
-    (\(Assign w _) -> (fitWidth w g, gridHeight g))
+  Block . const $
+    Measured
+      (Request (gridWidth g) (gridWidth g) 0 Nothing False False)
+      (\(Assign w _) -> (fitWidth w g, gridHeight g))
 
 -- | The block with no lines.
 emptyBlock :: Block
 emptyBlock = fromGrid emptyGrid
 
--- | Inline text, word-wrapped to the width it is given, with tabs as four
--- spaces.
+-- | Inline text, laid out in the text settings it inherits: word-wrapped
+-- to the width it is given (or cut short with an ellipsis), each line
+-- aligned in it.
 textBlock :: Inline -> Block
-textBlock inl = Block req run
-  where
-    ls = inlineLines 4 inl
-    req = Request (maximum (0 : concatMap (wordWidths []) ls)) (maximum (0 : map cellsWidth ls)) 0 Nothing False
-    run (Assign w _) =
-      let wrapped = concatMap (wrapCells w) ls
-       in (fitWidth w (fromCellLines wrapped), length wrapped)
+textBlock inl = Block $ \ctx ->
+  let transformed = maybe inl (\f -> let Inline segs = inl in Inline [(a, f t) | (a, t) <- segs]) (textTransform ctx)
+      ls0 = inlineLines (textTabWidth ctx) transformed
+      ls = if textInline ctx then [concat ls0] else ls0
+      hi = maximum (0 : map cellsWidth ls)
+      lo
+        | textWrap ctx && not (textInline ctx) = maximum (0 : concatMap (wordWidths (textBreaks ctx)) ls)
+        | otherwise = hi
+      run (Assign w _) =
+        let fitted
+              | textInline ctx = map (cropCells w) ls
+              | textWrap ctx = concatMap (wrapCellsWith (textBreaks ctx) w) ls
+              | otherwise = map (truncateCells w) ls
+         in (fitWidth w (fromCellLines (map (alignText (textAlign ctx) w) fitted)), length fitted)
+   in Measured (Request lo hi 0 Nothing False True) run
 
 -- | The width to lay out something with a 'Lipstick.Mod.maxWidth' crop at,
 -- before cropping, given the crop, its weight for spare width, its natural

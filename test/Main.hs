@@ -9,7 +9,7 @@ import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..), lineSpans)
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), allocate, allocateWithin)
+import Lipstick.Internal.Layout (Assign (..), Measured (..), Request (..), allocate, allocateWithin, measure)
 import Lipstick.Internal.Types (escapeUri)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv, widthFromEnv)
 import Lipstick.Width (clusters)
@@ -47,6 +47,7 @@ main = do
       , ansiTests
       , profileTests
       , allocateTests
+      , inheritanceTests
       , deferredLayoutTests
       , properties
       ]
@@ -293,9 +294,9 @@ tableTests =
     , testCase "empty table" $ blockHeight (table mempty [] []) @?= 0
     , testCase "maxWidth crops" $ blockWidth (table (maxWidth 4) ["abcdef"] []) @?= 4
     , testProperty "rectangular and respects width" $ \(Positive extra) (TableData hs rs) ->
-        let natural = table mempty hs rs
+        let natural = table mempty (map fromInline hs) (map (map fromInline) rs)
             target = blockWidth natural + extra - 3
-            b = table (width target) hs rs
+            b = table (width target) (map fromInline hs) (map (map fromInline) rs)
          in blockWidth natural > 0 && target >= 2 * length (concat (hs : rs)) + 2 ==>
               rectangular b .&&. blockWidth b === target
     ]
@@ -494,7 +495,8 @@ styleParityTests =
           @?= "\ESC[0;9ma\ESC[0m \ESC[0;9mb\ESC[0m"
     , testCase "transform" $ do
         plainLines (render (transform T.toUpper) ("raow " <> styled bold "meow")) @?= ["RAOW MEOW"]
-        plainLines (frame (transform T.toUpper) (text "raow")) @?= ["raow"]
+        -- Text inside a framed block inherits the transform.
+        plainLines (frame (transform T.toUpper) (text "raow")) @?= ["RAOW"]
     , testCase "unset modifiers" $ do
         render (padding 1 1 <> unsetPadding) "x" @?~ render mempty "x"
         render (margin 1 1 <> unsetMargins) "x" @?~ render mempty "x"
@@ -601,10 +603,10 @@ tableParityTests =
         plainLines (table (width 8) ["Header text", "H"] [["a", "b"]])
           @?= ["╭────┬─╮", "│Hea…│H│", "├────┼─┤", "│a   │b│", "╰────┴─╯"]
     , testProperty "a table never exceeds its height" $ \(Positive h) (TableData hs rs) ->
-        blockHeight (table (height h) hs rs) <= h
+        blockHeight (table (height h) (map fromInline hs) (map (map fromInline) rs)) <= h
     ]
   where
-    numbered = [[plain (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
+    numbered = [[text (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
 
 outlineParityTests :: TestTree
 outlineParityTests =
@@ -944,7 +946,7 @@ toBlock = \case
   ShapeRow p shs -> joinHorizontal ([top, center, bottom] !! p) (map toBlock shs)
   ShapeColumn p shs -> joinVertical ([left, center, right] !! p) (map toBlock shs)
   ShapePlace w st sh -> place (maybe mempty width w <> (if st then stretchHeight else mempty) <> align center) (toBlock sh)
-  ShapeTable w g rows -> table (maybe mempty width w <> (if g then fillWidth else mempty)) ["a", "b"] (map (map plain) rows)
+  ShapeTable w g rows -> table (maybe mempty width w <> (if g then fillWidth else mempty)) ["a", "b"] (map (map text) rows)
   ShapeList g shs -> list (if g then fillWidth else mempty) (map toBlock shs)
   ShapeTree root shs -> tree mempty (Node (toBlock root) [Node (toBlock sh) [] | sh <- shs])
   ShapeLayers ls -> compose [layer (offset x y) (toBlock sh) | ((x, y), sh) <- ls]
@@ -967,24 +969,24 @@ deferredLayoutTests =
     [ testProperty "a block is exactly as wide as the width it is given" $ \sh ->
         let b = toBlock sh
          in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
-              let g = fst (blockLayout b (Assign w 0))
+              let g = fst (blockLayout (measure b) (Assign w 0))
                in gridWidth g === w .&&. gridIsRectangular g
     , testProperty "the natural height is the height of the grid" $ \sh ->
         let b = toBlock sh
          in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
-              let (g, n) = blockLayout b (Assign w 0)
+              let (g, n) = blockLayout (measure b) (Assign w 0)
                in gridHeight g === n
     , testProperty "the natural height does not depend on the height to stretch to" $ \sh ->
         let b = toBlock sh
          in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
-              snd (blockLayout b (Assign w (error "the target height was forced")))
-                === snd (blockLayout b (Assign w 0))
+              snd (blockLayout (measure b) (Assign w (error "the target height was forced")))
+                === snd (blockLayout (measure b) (Assign w 0))
     , testProperty "only blocks that stretch grow to the height they are asked for" $ \sh (NonNegative extra) ->
         let b = toBlock sh
             w = blockWidth b
             n = blockHeight b
-            g = fst (blockLayout b (Assign w (n + extra)))
-         in gridHeight g === (if reqStretch (blockRequest b) then n + extra else n)
+            g = fst (blockLayout (measure b) (Assign w (n + extra)))
+         in gridHeight g === (if reqStretch (blockRequest (measure b)) then n + extra else n)
     , testProperty "the smallest width is at most the natural width" $ \sh ->
         let b = toBlock sh in blockMinWidth b <= blockWidth b
     , testProperty "with no limit, a block is laid out at its natural width" $ \sh ->
@@ -1062,7 +1064,7 @@ deferredLayoutTests =
         plainLinesAt 13 (table fillWidth ["a", "b"] [["1", "2"]])
           @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]
     , testCase "which rows a table shows depends on its width" $ do
-        let rows = [[plain (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
+        let rows = [[text (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
         visibleRows Nothing (height 8) ["N", "What"] rows @?= (0, 2)
         visibleRows (Just 9) (height 8) ["N", "What"] rows @?= (0, 0)
     , testCase "list items wrap after their enumerator" $
@@ -1080,6 +1082,39 @@ deferredLayoutTests =
     , testCase "a column aligns blocks that do not grow" $
         plainLinesAt 8 (joinVertical right [render fillWidth "abc", "d"])
           @?= ["abc     ", "       d"]
+    ]
+
+inheritanceTests :: TestTree
+inheritanceTests =
+  testGroup
+    "inherited text settings"
+    [ testCase "a frame aligns the lines of text inside it" $
+        plainLines (frame (align center <> width 9) (text "aa bbbbbbb c"))
+          @?= ["   aa    ", "bbbbbbb c"]
+    , testCase "render is frame of inline text" $
+        render (align right <> width 8 <> border normalBorder) "ab cd ef"
+          @?~ frame (align right <> width 8 <> border normalBorder) (fromInline "ab cd ef")
+    , testCase "a frame aligns a row as a whole" $
+        plainLines (frame (align center <> width 8) (hcat ["ab", "cd"])) @?= ["  abcd  "]
+    , testCase "noWrap is inherited" $
+        plainLines (frame (noWrap <> width 6) (frame mempty (text "abcdefgh"))) @?= ["abcde…"]
+    , testCase "the nearer setting wins" $
+        plainLines (frame (align right <> width 6) (frame (align left <> width 6) (text "ab"))) @?= ["ab    "]
+    , testCase "settings not set are inherited through nested frames" $
+        plainLines (frame (align right <> width 6) (frame (border normalBorder <> width 6) (text "ab")))
+          @?= ["┌────┐", "│  ab│", "└────┘"]
+    , testCase "alignment space gets only the background" $
+        toAnsi defaultRenderEnv (frame (underline <> bg red <> align right <> width 4) (text "ab"))
+          @?= "\ESC[0;41m  \ESC[0;4;41mab\ESC[0m"
+    , testCase "underlineSpaces leaves alignment space alone" $
+        toAnsi defaultRenderEnv (frame (underlineSpaces True <> align right <> width 4) (text "a b"))
+          @?= " a\ESC[0;4m \ESC[0mb"
+    , testCase "table cells can hold any block" $
+        plainLines (table (border asciiBorder) ["Name", "Items"] [["fruit", list mempty ["apple", "pear"]]])
+          @?= ["+-----+-------+", "|Name |Items  |", "+-----+-------+", "|fruit|• apple|", "|     |• pear |", "+-----+-------+"]
+    , testCase "a centred cell centres each of its lines" $
+        plainLinesAt 12 (table (border asciiBorder <> cellStyle (const (align center))) ["x"] [["aa bbbbbbbb"]])
+          @?= ["+----------+", "|    x     |", "+----------+", "|    aa    |", "| bbbbbbbb |", "+----------+"]
     ]
 
 -- | (min, max, weight) for a child of a row.

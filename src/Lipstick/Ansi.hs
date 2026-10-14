@@ -91,7 +91,7 @@ renderLine env = go plainSGR Nothing Nothing . lineCells
   where
     go cur lnk _ [] =
       [sgrCode plainSGR | cur /= plainSGR] ++ [closeLink | Just _ <- [lnk]]
-    go cur lnk prev (Cell a t _ : rest)
+    go cur lnk prev (Cell a t _ _ : rest)
       | Just a == prev = t : go cur lnk prev rest
       | otherwise =
           let (sgr, lnk') = resolveAttrs env a

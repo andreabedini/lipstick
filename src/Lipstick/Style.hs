@@ -49,7 +49,7 @@ import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Color (Color, blend)
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), cropLayoutWidth, fromGrid)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle (..), cropLayoutWidth, measureIn, takenWidth, textBlock)
 import Lipstick.Internal.Types
 import Lipstick.Mod
 import Lipstick.Width (textWidth)
@@ -109,8 +109,8 @@ inline = fieldMod (\s -> s {styleInline = True})
 unsetInline :: Mod Style
 unsetInline = fieldMod (\s -> s {styleInline = False})
 
--- | Change the text before rendering it (each styled piece separately).
--- Does not apply to 'frame'.
+-- | Change the text before rendering it (each styled piece separately),
+-- including text inside blocks the style frames.
 --
 -- > render (transform T.toUpper) "raow!"
 transform :: (Text -> Text) -> Mod Style
@@ -146,49 +146,69 @@ strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 inherit :: Mod Style -> Mod Style
 inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
 
--- | Render text in a box. The text is word-wrapped to fit inside the
--- padding and border: of the 'width' if one is set, and otherwise of the
--- width the box is given when it is laid out. With 'noWrap', lines that
--- are too long are cut short with an ellipsis instead.
+-- | Render text in a box: @frame m ('Lipstick.Block.fromInline' inl)@.
+-- The text is word-wrapped to fit inside the padding and border: of the
+-- 'width' if one is set, and otherwise of the width the box is given when
+-- it is laid out. With 'noWrap', lines that are too long are cut short
+-- with an ellipsis instead.
 render :: Mod Style -> Inline -> Block
-render m inl
-  | styleInline s = fromGrid (cropToProps p (overCellAttrs (propAttrs p <>) [concat ls]))
-  | otherwise = box s p (Content lo hi at)
-  where
-    (s, p) = resolveStyle m
-    ls = inlineLines (styleTabWidth s) (maybe inl (`transformInline` inl) (styleTransform s))
-    hi = maximum (0 : map cellsWidth ls)
-    lo
-      | styleWrap s = maximum (0 : concatMap (wordWidths (styleBreaks s)) ls)
-      | otherwise = hi
-    at cw _ =
-      let wrapped
-            | styleWrap s = concatMap (wrapCellsWith (styleBreaks s) cw) ls
-            | otherwise = map (truncateCells cw) ls
-       in (wrapped, length wrapped)
+render m = frame m . textBlock
 
 -- | Put a block in a box. The block is laid out in the width left inside
--- the padding and border, so text in it wraps to fit.
+-- the padding and border: text in it wraps to fit, and other blocks take
+-- what they need, aligned by 'align'.
+--
+-- The style's text settings ('align', 'noWrap', 'breakAfter', 'tabWidth',
+-- 'transform', 'inline') apply to all the text inside, unless something
+-- nearer sets them again, as its colours do.
 frame :: Mod Style -> Block -> Block
-frame m b = box s p (Content (reqMin r) (reqMax r) at)
+frame m b = Block $ \ctx ->
+  let (s, p) = runMod m (inheriting ctx)
+      n = measureIn (textStyleOf ctx s) b
+   in if styleInline s then inlineNode p n else box s p n
+
+-- | The defaults of a style inside inherited text settings. Whether the
+-- style itself is 'inline' (has no box) is not inherited.
+inheriting :: TextStyle -> Style
+inheriting ctx =
+  defStyle
+    { styleAlign = (styleAlign defStyle) {alignH = textAlign ctx}
+    , styleWrap = textWrap ctx
+    , styleBreaks = textBreaks ctx
+    , styleTabWidth = textTabWidth ctx
+    , styleTransform = textTransform ctx
+    }
+
+-- | The text settings a style passes on to what it frames.
+textStyleOf :: TextStyle -> Style -> TextStyle
+textStyleOf ctx s =
+  TextStyle
+    { textAlign = alignH (styleAlign s)
+    , textWrap = styleWrap s
+    , textBreaks = styleBreaks s
+    , textTabWidth = styleTabWidth s
+    , textTransform = styleTransform s
+    , textInline = textInline ctx || styleInline s
+    }
+
+-- | An 'inline' style: no box, only its attributes under the content and
+-- its 'maxWidth' and 'maxHeight' crop.
+inlineNode :: Props -> Measured -> Measured
+inlineNode p n = Measured req run
   where
-    (s, p) = resolveStyle m
-    r = blockRequest b
-    at cw th = let (g, n) = blockLayout b (Assign cw th) in (gridCells g, n)
+    r = blockRequest n
+    capW x = maybe x (min x . max 0) (propMaxWidth p)
+    capH x = maybe x (min x . max 0) (propMaxHeight p)
+    req = r {reqMin = capW (reqMin r), reqMax = capW (reqMax r), reqLimit = max 0 <$> propMaxWidth p, reqFill = False}
+    run (Assign w h) =
+      let (g, natural) = blockLayout n (Assign (cropLayoutWidth (propMaxWidth p) (reqGrow r) (reqMax r) w) h)
+       in (fitWidth w (withProps p (gridCells g)), capH natural)
 
--- | What goes in a box.
-data Content = Content
-  { contentMin :: Int
-  , contentMax :: Int
-  , contentAt :: Int -> Int -> ([[Cell]], Int)
-  -- ^ the lines at a width, given the height to stretch to (which the
-  -- natural number of lines, returned too, must not depend on)
-  }
-
--- | A box around content, laid out at the width it is given: margins,
--- border and padding take their columns and the content gets the rest.
-box :: Style -> Props -> Content -> Block
-box s p c = Block req run
+-- | A box around a block, laid out at the width it is given: margins,
+-- border and padding take their columns and the block gets the rest (all
+-- of it if it is text, and what it needs otherwise).
+box :: Style -> Props -> Measured -> Measured
+box s p c = Measured req run
   where
     Box (Sides pt pr pb pl) (Sides mt mr mb ml) _ _ _ = styleBox s
     Size wSet hSet weight stretch = styleSize s
@@ -198,28 +218,29 @@ box s p c = Block req run
     frameH = pt + pb + fromEnum et + fromEnum eb
     capW x = maybe x (min x . max 0) (propMaxWidth p)
     capH x = maybe x (min x . max 0) (propMaxHeight p)
-    natW = maybe (contentMax c + frameW) id wSet + ml + mr
+    cr = blockRequest c
+    natW = maybe (reqMax cr + frameW) id wSet + ml + mr
     req =
       Request
-        { reqMin = capW (maybe (contentMin c + frameW) id wSet + ml + mr)
+        { reqMin = capW (maybe (reqMin cr + frameW) id wSet + ml + mr)
         , reqMax = capW natW
         , reqGrow = weight
         , reqLimit = max 0 <$> propMaxWidth p
         , reqStretch = stretch
+        , reqFill = False
         }
     run (Assign w h) = (fitWidth w grid, natural)
       where
         boxW = max 0 (cropLayoutWidth (propMaxWidth p) weight natW w - ml - mr)
+        innerW = max 0 (boxW - frameW)
         -- The height the box (without margins) is drawn at; the natural
         -- height must not depend on it.
         target = max (fromMaybe 0 hSet) (if stretch then h - mt - mb else 0)
-        (ls, n) = contentAt c (max 0 (boxW - frameW)) (max 0 (target - frameH))
+        childW = if reqFill cr then innerW else takenWidth cr innerW
+        (g, n) = blockLayout c (Assign childW (max 0 (target - frameH)))
         natural = capH (max (n + frameH) (fromMaybe 0 hSet) + mt + mb)
         sized = (styleSize s) {sizeWidth = Just boxW, sizeHeight = Just target}
-        grid = layoutBox s {styleSize = sized} p ls
-
-transformInline :: (Text -> Text) -> Inline -> Inline
-transformInline f (Inline segs) = Inline [(a, f t) | (a, t) <- segs]
+        grid = layoutBox s {styleSize = sized} p (gridCells g)
 
 -- | Widths of the left and right border columns.
 borderColumns :: BorderProps -> (Int, Int)
@@ -251,9 +272,9 @@ layoutBox s props content0 =
       bt = if edgeTop edges then 1 else 0
       bb = if edgeBottom edges then 1 else 0
 
-      content = map (map spaceRule) (overCellAttrs (attrs <>) content0)
+      content = map (map spaceRule) (underlay attrs fill content0)
       spaceRule c
-        | cellText c == T.singleton ' ' = c {cellAttrs = spaceAttrs (cellAttrs c)}
+        | cellText c == T.singleton ' ' && not (cellFill c) = c {cellAttrs = spaceAttrs (cellAttrs c)}
         | otherwise = c
       spaceAttrs a =
         a

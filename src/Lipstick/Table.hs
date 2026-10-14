@@ -28,10 +28,10 @@ import Data.Maybe (isJust)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), allocate, cropLayoutWidth, takenWidth)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, allocate, cropLayoutWidth, defTextStyle, measureIn, takenWidth, textBlock)
 import Lipstick.Internal.Types (Attrs (..))
 import Lipstick.Mod
-import Lipstick.Style (Style, render)
+import Lipstick.Style (Style, frame)
 import Lipstick.Width (textWidth)
 
 -- | Where a cell is: in the header, or in a body row (counting from 0).
@@ -130,25 +130,25 @@ fitContent = fieldMod (\t -> t {tableFitContent = True})
 -- | A table with a header row (none if empty) and body rows. Short rows
 -- are padded with empty cells. Its columns fit the width the table is
 -- laid out in (see 'HasSize').
-table :: Mod Table -> [Inline] -> [[Inline]] -> Block
-table m headers rows = Block req (\(Assign w _) -> let (g, _) = run w in (g, gridHeight g))
-  where
-    (req, run) = tableLayout m headers rows
+table :: Mod Table -> [Block] -> [[Block]] -> Block
+table m headers rows = Block $ \ctx ->
+  let (req, run) = tableLayout ctx m headers rows
+   in Measured req (\(Assign w _) -> let (g, _) = run w in (g, gridHeight g))
 
 -- | The first and last body rows a table shows, laid out in an available
 -- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout'.
 -- The last is one less than the first when none are shown. All rows unless
 -- the table has a 'height'.
-visibleRows :: Maybe Int -> Mod Table -> [Inline] -> [[Inline]] -> (Int, Int)
+visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> (Int, Int)
 visibleRows avail m headers rows = snd (run (maybe (reqMax req) (takenWidth req) avail))
   where
-    (req, run) = tableLayout m headers rows
+    (req, run) = tableLayout defTextStyle m headers rows
 
 -- | What a table asks for, and how it lays out at a width, with the body
 -- rows it shows.
-tableLayout :: Mod Table -> [Inline] -> [[Inline]] -> (Request, Int -> (Grid, (Int, Int)))
-tableLayout m headers rows
-  | ncols == 0 = (Request 0 0 0 Nothing False, \w -> (Grid w 0 [], (0, -1)))
+tableLayout :: TextStyle -> Mod Table -> [Block] -> [[Block]] -> (Request, Int -> (Grid, (Int, Int)))
+tableLayout ctx m headers rows
+  | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (Grid w 0 [], (0, -1)))
   | otherwise = (req, run)
   where
     (t, props) = runMod m defTable
@@ -160,7 +160,7 @@ tableLayout m headers rows
     Size wSet hgt weight _ = tableSize t
 
     ncols = maximum (0 : length headers : map length rows)
-    padRow r = take ncols (r ++ repeat mempty)
+    padRow r = take ncols (r ++ repeat (textBlock mempty))
     headerRow = [(HeaderCell, padRow headers) | not (null headers)]
     bodyRows = [(BodyCell i, padRow r) | (i, r) <- zip [0 ..] rows]
 
@@ -169,12 +169,18 @@ tableLayout m headers rows
     truncates pos = case pos of
       HeaderCell _ -> True
       BodyCell _ _ -> not (tableWrap t)
-    cellBlock pos = render (tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty)
-    cellBlocks (mk, r) = [cellBlock (mk c) inl | (c, inl) <- zip [0 ..] r]
+    cellNodes (mk, r) =
+      [ measureIn ctx (frame (tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty) b)
+      | (c, b) <- zip [0 ..] r
+      , let pos = mk c
+      ]
+    -- Each cell's node is made once, for measuring and for layout.
+    headerNodes = map cellNodes headerRow
+    bodyNodes = map cellNodes bodyRows
 
     -- Column widths: the natural width, and the narrowest that breaks no
     -- word (cells that are cut short can shrink to one column).
-    columns = transpose [[(pos, blockRequest b) | (pos, b) <- zip (map mk [0 ..]) (cellBlocks row)] | row@(mk, _) <- headerRow ++ bodyRows]
+    columns = transpose [[(mk c, blockRequest n) | (c, n) <- zip [0 ..] ns] | ((mk, _), ns) <- zip (headerRow ++ bodyRows) (headerNodes ++ bodyNodes)]
     natural = [maximum (0 : [reqMax r | (_, r) <- col]) | col <- columns]
     narrowest = [maximum (0 : [if truncates pos then min 1 (reqMax r) else reqMin r | (pos, r) <- col]) | col <- columns]
     sideW f e = if f edges then max 1 (textWidth e) else 0
@@ -189,7 +195,7 @@ tableLayout m headers rows
         | tableFitContent t -> (min n smallest, min n full)
         | otherwise -> (n, n)
       Nothing -> (smallest, full)
-    req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) False
+    req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) False False
     -- Columns grow to a set width (unless they fit their content) or when
     -- the table grows. They shrink widest first, but not below their
     -- longest word while another column can still wrap; then further,
@@ -203,8 +209,8 @@ tableLayout m headers rows
 
         -- A row's cells at their column widths, stretched to the tallest:
         -- one layout per cell. Its natural height is the number of lines.
-        renderRow row =
-          let results = [blockLayout b (Assign cw rowH) | (b, cw) <- zip (cellBlocks row) widths]
+        renderRow ns =
+          let results = [blockLayout n (Assign cw rowH) | (n, cw) <- zip ns widths]
               rowH = maximum (1 : map snd results)
            in map line (transpose [gridCells g | (g, _) <- results])
 
@@ -220,10 +226,10 @@ tableLayout m headers rows
                 ++ [piece a r (sideW edgeRight (rightEdge chars)) | edgeRight edges]
             )
 
-        headerLines = concatMap renderRow headerRow
+        headerLines = concatMap renderRow headerNodes
         nBody = length rows
-        bodyLines = map renderRow bodyRows
-        overflowRow i = renderRow (BodyCell i, replicate ncols (plain (T.singleton '…')))
+        bodyLines = map renderRow bodyNodes
+        overflowRow i = renderRow (cellNodes (BodyCell i, replicate ncols (textBlock (plain (T.singleton '…')))))
 
         middleRule = rule ba (middleLeft chars) (middle chars) (middleRight chars) (topEdge chars)
         topLines = [rule ba (topLeftCorner chars) (middleTop chars) (topRightCorner chars) (topEdge chars) | edgeTop edges]

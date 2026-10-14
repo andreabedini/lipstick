@@ -95,7 +95,10 @@ place
 ![The word "centred" in the middle of an area filled with dots](docs/images/place.svg)
 
 `frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
-stack blocks, and `blockWidth` / `blockHeight` measure them.
+stack blocks, and `blockWidth` / `blockHeight` measure them. A style's
+text settings (`align`, `noWrap`, `breakAfter`, `tabWidth`, `transform`)
+apply to all the text inside what it frames, unless something nearer sets
+them again, as its colours do: `render style text` is `frame style (fromInline text)`.
 
 A block does not have a fixed width: it is laid out in the width it is
 given, and text in it wraps to fit. `fillWidth` (or `grow n`) makes a block
@@ -151,6 +154,7 @@ table
 
 ![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
 
+Cells are blocks, so they can hold lists, other tables or anything else.
 A table fits the width it is laid out in: columns shrink, wrapping their
 cells, widest first but without breaking a word while another column can
 still wrap (headers are cut short instead), and with `fillWidth` they grow
