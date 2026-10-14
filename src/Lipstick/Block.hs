@@ -138,8 +138,10 @@ vcat :: [Block] -> Block
 vcat = joinVertical left
 
 -- | Add attributes to ranges of display columns @[start, end)@, counted
--- across the text with newlines taking no columns. The range attributes
--- go on top of the text's own.
+-- across the text with newlines taking no columns. A tab counts as four
+-- columns, the default 'Lipstick.Style.tabWidth': where the text ends up,
+-- and so its tab width, is not known yet. The range attributes go on top
+-- of the text's own.
 --
 -- > styleRanges [(0, 3, bold <> fg red)] "foobar"
 styleRanges :: [(Int, Int, Mod Inline)] -> Inline -> Inline
@@ -163,6 +165,7 @@ restyle extra (Inline segs) = Inline (merge (go 0 0 (styledClusters segs)))
     go _ _ [] = []
     go col i ((a, c, cw) : rest)
       | T.any (== '\n') c = (a, c) : go col i rest
+      | c == T.singleton '\t' = (a <> extra col i, c) : go (col + textTabWidth defTextStyle) (i + 1) rest
       | otherwise = (a <> extra col i, c) : go (col + cw) (i + 1) rest
     merge ((a1, t1) : (a2, t2) : rest)
       | a1 == a2 = merge ((a1, t1 <> t2) : rest)

@@ -93,6 +93,9 @@ widthTests =
     , testCase "a cluster split across pieces takes the first piece's style" $
         toAnsi defaultRenderEnv (fromInline (styled bold "\x2764" <> "\xFE0F"))
           @?= "\ESC[0;1m\x2764\xFE0F\ESC[0m"
+    , testCase "styleRanges counts a tab as four columns" $
+        toAnsi defaultRenderEnv (fromInline (styleRanges [(4, 5, bold)] "\tab"))
+          @?= "    \ESC[0;1ma\ESC[0mb"
     , testCase "styleIndices counts a split cluster once" $
         toAnsi defaultRenderEnv (fromInline (styleIndices [1] bold mempty ("\x2764" <> "\xFE0F" <> "x")))
           @?= "\x2764\xFE0F\ESC[0;1mx\ESC[0m"
