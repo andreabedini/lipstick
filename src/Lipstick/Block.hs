@@ -40,7 +40,7 @@ import Data.Text qualified as T
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout
 import Lipstick.Internal.Types
-import Lipstick.Mod (Mod, Props (..), propsOf, runMod)
+import Lipstick.Internal.Mod (Mod, Props (..), propsOf, runMod)
 
 -- | The natural width of a block: as wide as it is with nothing wrapped.
 blockWidth :: Block -> Int

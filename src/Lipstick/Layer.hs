@@ -34,7 +34,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, defTextStyle, measureIn, takenWidth, usableWidth)
-import Lipstick.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
+import Lipstick.Internal.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
 
 data Layer = Layer
   { layerX :: !Int

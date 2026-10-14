@@ -30,7 +30,7 @@ import Lipstick.Border
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, allocate, cropLayoutWidth, defTextStyle, measureIn, takenWidth, textBlock)
 import Lipstick.Internal.Types (Attrs (..))
-import Lipstick.Mod
+import Lipstick.Internal.Mod
 import Lipstick.Style (Style, frame)
 import Lipstick.Width (textWidth)
 

@@ -11,7 +11,7 @@ import Data.Text qualified as T
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), cropLayoutWidth, measureIn)
 import Lipstick.Internal.Types
-import Lipstick.Mod
+import Lipstick.Internal.Mod
 
 -- | The surrounding area: its size, where the block sits in it, and the
 -- characters of the whitespace. Its text attributes colour the whitespace

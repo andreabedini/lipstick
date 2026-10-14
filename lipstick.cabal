@@ -49,6 +49,8 @@ library
         Lipstick.Internal.Layout
         Lipstick.Internal.Types
         Lipstick.Internal.UnicodeTable
+    other-modules:
+        Lipstick.Internal.Mod
     build-depends:
         base ^>=4.21.0.0,
         array ^>=0.5,

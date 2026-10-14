@@ -54,7 +54,7 @@ import Data.Tree (Forest, Tree (..))
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, cropLayoutWidth, layoutIn, measureIn, takenWidth)
 import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
-import Lipstick.Mod
+import Lipstick.Internal.Mod
 import Lipstick.Style (Style, frame, render)
 
 -- | How items are marked.

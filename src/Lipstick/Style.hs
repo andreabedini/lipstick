@@ -14,7 +14,6 @@ module Lipstick.Style
   , colorWhitespace
   , underlineSpaces
   , strikethroughSpaces
-  , resolveStyle
   , inherit
 
     -- * Getters
@@ -51,7 +50,7 @@ import Lipstick.Color (Color, blend)
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle (..), cropLayoutWidth, measureIn, takenWidth, textBlock)
 import Lipstick.Internal.Types
-import Lipstick.Mod
+import Lipstick.Internal.Mod
 import Lipstick.Width (textWidth)
 
 -- | The fields of a style. Its text attributes are in the common
