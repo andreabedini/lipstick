@@ -8,7 +8,8 @@ import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
-import Lipstick.Internal.Layout (allocate)
+import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
+import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), allocate, allocateWithin)
 import Lipstick.Internal.Types (escapeUri)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
 import Lipstick.Width (clusters)
@@ -45,11 +46,22 @@ main = do
       , ansiTests
       , profileTests
       , allocateTests
+      , deferredLayoutTests
       , properties
       ]
 
 plainLines :: Block -> [Text]
 plainLines = T.lines . renderPlain
+
+-- | Blocks are equal when they lay out the same at their natural width.
+(@?~) :: Block -> Block -> Assertion
+a @?~ b = layout Nothing a @?= layout Nothing b
+
+infix 1 @?~
+
+-- | The plain lines of a block laid out in a width.
+plainLinesAt :: Int -> Block -> [Text]
+plainLinesAt w = T.lines . toAnsi (RenderEnv NoTTY True (Just w))
 
 widthTests :: TestTree
 widthTests =
@@ -232,7 +244,7 @@ extrasTests =
           _ -> assertFailure (show ls)
     , testCase "borderFg clears a gradient" $
         render (border normalBorder <> borderFgBlend [red, blue] <> borderFg green) "x"
-          @?= render (border normalBorder <> borderFg green) "x"
+          @?~ render (border normalBorder <> borderFg green) "x"
     ]
 
 tableTests :: TestTree
@@ -483,15 +495,15 @@ styleParityTests =
         plainLines (render (transform T.toUpper) ("raow " <> styled bold "meow")) @?= ["RAOW MEOW"]
         plainLines (frame (transform T.toUpper) (text "raow")) @?= ["raow"]
     , testCase "unset modifiers" $ do
-        render (padding 1 1 <> unsetPadding) "x" @?= render mempty "x"
-        render (margin 1 1 <> unsetMargins) "x" @?= render mempty "x"
-        render (border roundedBorder <> borderFg red <> unsetBorder) "x" @?= render mempty "x"
-        render (width 10 <> unsetWidth) "x" @?= render mempty "x"
-        render (maxWidth 1 <> unsetMaxWidth) "xy" @?= render mempty "xy"
-        render (width 5 <> align right <> unsetAlign) "x" @?= render (width 5) "x"
-        render (link "u" <> underline <> unsetLink <> unsetUnderline) "x" @?= render mempty "x"
-        render (tabWidth 1 <> unsetTabWidth) "a\tb" @?= render mempty "a\tb"
-        render (transform T.toUpper <> unsetTransform) "x" @?= render mempty "x"
+        render (padding 1 1 <> unsetPadding) "x" @?~ render mempty "x"
+        render (margin 1 1 <> unsetMargins) "x" @?~ render mempty "x"
+        render (border roundedBorder <> borderFg red <> unsetBorder) "x" @?~ render mempty "x"
+        render (width 10 <> unsetWidth) "x" @?~ render mempty "x"
+        render (maxWidth 1 <> unsetMaxWidth) "xy" @?~ render mempty "xy"
+        render (width 5 <> align right <> unsetAlign) "x" @?~ render (width 5) "x"
+        render (link "u" <> underline <> unsetLink <> unsetUnderline) "x" @?~ render mempty "x"
+        render (tabWidth 1 <> unsetTabWidth) "a\tb" @?~ render mempty "a\tb"
+        render (transform T.toUpper <> unsetTransform) "x" @?~ render mempty "x"
     , testCase "frame size" $ do
         let m = padding 1 2 <> border normalBorder <> margin 1 1
         frameSize m @?= (8, 6)
@@ -520,9 +532,9 @@ textParityTests =
   testGroup
     "text and colour parity"
     [ testCase "wrap breaks after break characters" $
-        plainLines (wrap 10 "-" "long-winded words") @?= ["long- ", "winded", "words "]
+        plainLinesAt 10 (render (breakAfter "-") "long-winded words") @?= ["long-     ", "winded    ", "words     "]
     , testCase "wrap without break characters" $
-        plainLines (wrap 10 "" "long-winded words") @?= ["long-winde", "d words   "]
+        plainLinesAt 10 (render mempty "long-winded words") @?= ["long-winde", "d words   "]
     , testCase "styleRanges" $
         toAnsi defaultRenderEnv (fromInline (styleRanges [(0, 3, bold)] "foobar"))
           @?= "\ESC[0;1mfoo\ESC[0mbar"
@@ -662,8 +674,8 @@ renderTests =
     , testCase "noWrap does not cut a wide character in half" $
         plainLines (render (width 4 <> noWrap) "日本語") @?= ["日 …"]
     , testCase "negative padding and margins count as 0" $ do
-        render (border normalBorder <> padding 0 (-1)) "hello" @?= render (border normalBorder) "hello"
-        render (border normalBorder <> margin (-1) (-2)) "hello" @?= render (border normalBorder) "hello"
+        render (border normalBorder <> padding 0 (-1)) "hello" @?~ render (border normalBorder) "hello"
+        render (border normalBorder <> margin (-1) (-2)) "hello" @?~ render (border normalBorder) "hello"
         getPadding (paddingLeft (-3)) @?= Sides 0 0 0 0
     , testCase "inherit keeps padding" $
         plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
@@ -698,16 +710,16 @@ ansiTests =
         toAnsi defaultRenderEnv (render (bold <> fg "#ff0000") "hi")
           @?= "\ESC[0;1;38;2;255;0;0mhi\ESC[0m"
     , testCase "downsampled to 256" $
-        toAnsi (RenderEnv ANSI256 True) (render (fg "#ff0000") "hi")
+        toAnsi (RenderEnv ANSI256 True Nothing) (render (fg "#ff0000") "hi")
           @?= "\ESC[0;38;5;196mhi\ESC[0m"
     , testCase "basic colours" $
-        toAnsi (RenderEnv ANSI16 True) (render (fg red <> bg brightBlue) "hi")
+        toAnsi (RenderEnv ANSI16 True Nothing) (render (fg red <> bg brightBlue) "hi")
           @?= "\ESC[0;31;104mhi\ESC[0m"
     , testCase "ascii keeps attributes, drops colours" $
-        toAnsi (RenderEnv Ascii True) (render (bold <> fg red) "hi")
+        toAnsi (RenderEnv Ascii True Nothing) (render (bold <> fg red) "hi")
           @?= "\ESC[0;1mhi\ESC[0m"
     , testCase "NoTTY is plain" $
-        toAnsi (RenderEnv NoTTY True) (render (bold <> fg red <> link "x") "hi") @?= "hi"
+        toAnsi (RenderEnv NoTTY True Nothing) (render (bold <> fg red <> link "x") "hi") @?= "hi"
     , testCase "nested style keeps outer background" $
         toAnsi defaultRenderEnv (render (bg "1") (styled bold "a" <> "b"))
           @?= "\ESC[0;1;41ma\ESC[0;41mb\ESC[0m"
@@ -715,7 +727,7 @@ ansiTests =
         toAnsi defaultRenderEnv (render (underline <> bg "1" <> paddingLeft 1) "a")
           @?= "\ESC[0;41m \ESC[0;4;41ma\ESC[0m"
     , testCase "curly underline downgraded below true colour" $
-        toAnsi (RenderEnv ANSI256 True) (render (underlineStyle CurlyUnderline) "a")
+        toAnsi (RenderEnv ANSI256 True Nothing) (render (underlineStyle CurlyUnderline) "a")
           @?= "\ESC[0;4ma\ESC[0m"
     , testCase "hyperlink" $
         toAnsi defaultRenderEnv (render (link "https://x.y") "a")
@@ -736,15 +748,15 @@ ansiTests =
         (path, h) <- openTempFile dir "lipstick.txt"
         hSetEncoding h =<< mkTextEncoding "ASCII"
         let b = render (border roundedBorder) "héllo"
-        hPutBlockWith (RenderEnv NoTTY True) h b
+        hPutBlockWith (RenderEnv NoTTY True Nothing) h b
         hClose h
         out <- Utf8.readFile path
         removeFile path
         out @?= renderPlain b <> "\n"
     , testCase "light/dark resolved at output" $ do
         let b = render (fg (lightDark "1" "2")) "a"
-        toAnsi (RenderEnv TrueColor True) b @?= "\ESC[0;32ma\ESC[0m"
-        toAnsi (RenderEnv TrueColor False) b @?= "\ESC[0;31ma\ESC[0m"
+        toAnsi (RenderEnv TrueColor True Nothing) b @?= "\ESC[0;32ma\ESC[0m"
+        toAnsi (RenderEnv TrueColor False Nothing) b @?= "\ESC[0;31ma\ESC[0m"
     ]
 
 profileTests :: TestTree
@@ -860,6 +872,138 @@ stripAnsi t = case T.breakOn "\ESC" t of
         before <> stripAnsi (T.drop 2 (snd (T.breakOn "\ESC\\" (T.drop 2 rest))))
     | otherwise -> before <> stripAnsi (T.drop 1 (T.dropWhile (/= 'm') rest))
 
+-- | A description of a block, to generate block trees.
+data Shape
+  = ShapeText Text
+  | ShapeRender StyleSpec Bool Bool Text
+  -- ^ style, grows, stretches
+  | ShapeFrame StyleSpec Bool Bool Shape
+  | ShapeRow Int [Shape]
+  | ShapeColumn Int [Shape]
+  | ShapePlace (Maybe Int) Bool Shape
+  -- ^ width, stretches
+  | ShapeTable [[Text]]
+  | ShapeEmpty
+  deriving (Show)
+
+instance Arbitrary Shape where
+  arbitrary = sized go
+    where
+      go n
+        | n <= 1 = leaf
+        | otherwise =
+            frequency
+              [ (3, leaf)
+              , (2, ShapeFrame <$> arbitrary <*> arbitrary <*> arbitrary <*> go (n `div` 2))
+              , (2, ShapeRow <$> chooseInt (0, 2) <*> children n)
+              , (2, ShapeColumn <$> chooseInt (0, 2) <*> children n)
+              , (1, ShapePlace <$> oneof [pure Nothing, Just <$> chooseInt (0, 30)] <*> arbitrary <*> go (n `div` 2))
+              ]
+      children n = do
+        k <- chooseInt (0, 3)
+        vectorOf k (go (n `div` (k + 1)))
+      leaf =
+        frequency
+          [ (2, (\(Words t) -> ShapeText t) <$> arbitrary)
+          , (3, (\spec g st (Words t) -> ShapeRender spec g st t) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
+          , (1, ShapeTable <$> vectorOf 2 (vectorOf 2 ((\(Words t) -> t) <$> arbitrary)))
+          , (1, pure ShapeEmpty)
+          ]
+
+toBlock :: Shape -> Block
+toBlock = \case
+  ShapeText t -> text t
+  ShapeRender spec g st t -> render (specMod spec <> flags g st) (plain t)
+  ShapeFrame spec g st sh -> frame (specMod spec <> flags g st) (toBlock sh)
+  ShapeRow p shs -> joinHorizontal ([top, center, bottom] !! p) (map toBlock shs)
+  ShapeColumn p shs -> joinVertical ([left, center, right] !! p) (map toBlock shs)
+  ShapePlace w st sh -> place (maybe mempty width w <> (if st then stretchHeight else mempty) <> align center) (toBlock sh)
+  ShapeTable rows -> table (width 20) ["a", "b"] (map (map plain) rows)
+  ShapeEmpty -> emptyBlock
+  where
+    flags g st = (if g then fillWidth else mempty) <> (if st then stretchHeight else mempty)
+
+-- | Every line is as wide as the grid, and so is its text on a terminal.
+gridIsRectangular :: Grid -> Property
+gridIsRectangular g =
+  counterexample (show g) $
+    length (gridLines g) === gridHeight g
+      .&&. conjoin [lineWidth l === gridWidth g | l <- gridLines g]
+      .&&. conjoin [textWidth (T.concat (map spanText (lineSpans l))) === gridWidth g | l <- gridLines g]
+
+deferredLayoutTests :: TestTree
+deferredLayoutTests =
+  testGroup
+    "deferred layout"
+    [ testProperty "a block is exactly as wide as the width it is given" $ \sh ->
+        let b = toBlock sh
+         in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
+              let g = fst (blockLayout b (Assign w 0))
+               in gridWidth g === w .&&. gridIsRectangular g
+    , testProperty "the natural height is the height of the grid" $ \sh ->
+        let b = toBlock sh
+         in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
+              let (g, n) = blockLayout b (Assign w 0)
+               in gridHeight g === n
+    , testProperty "the natural height does not depend on the height to stretch to" $ \sh ->
+        let b = toBlock sh
+         in forAll (chooseInt (0, blockWidth b + 10)) $ \w ->
+              snd (blockLayout b (Assign w (error "the target height was forced")))
+                === snd (blockLayout b (Assign w 0))
+    , testProperty "only blocks that stretch grow to the height they are asked for" $ \sh (NonNegative extra) ->
+        let b = toBlock sh
+            w = blockWidth b
+            n = blockHeight b
+            g = fst (blockLayout b (Assign w (n + extra)))
+         in gridHeight g === (if reqStretch (blockRequest b) then n + extra else n)
+    , testProperty "the smallest width is at most the natural width" $ \sh ->
+        let b = toBlock sh in blockMinWidth b <= blockWidth b
+    , testProperty "with no limit, a block is laid out at its natural width" $ \sh ->
+        let b = toBlock sh
+            g = layout Nothing b
+         in gridWidth g === blockWidth b .&&. gridHeight g === blockHeight b
+    , testCase "text wraps to the width" $
+        plainLinesAt 10 (text "the quick brown fox") @?= ["the quick ", "brown fox "]
+    , testCase "a box wraps its text inside the border" $
+        plainLinesAt 12 (render (border normalBorder <> padding 0 1) "the quick brown fox")
+          @?= ["┌──────────┐", "│ the      │", "│ quick    │", "│ brown    │", "│ fox      │", "└──────────┘"]
+    , testCase "a frame lays its block out in the width left inside" $
+        plainLinesAt 7 (frame (border normalBorder) (text "aaa bbb ccc"))
+          @?= ["┌─────┐", "│aaa  │", "│bbb  │", "│ccc  │", "└─────┘"]
+    , testCase "a block narrower than the space keeps its natural width" $
+        plainLinesAt 40 (render (border normalBorder) "hi") @?= ["┌──┐", "│hi│", "└──┘"]
+    , testCase "fillWidth takes the spare columns of a row" $
+        plainLinesAt 12 (hcat [render (width 4) "ab", render (fillWidth <> bg red) "cd", "!"])
+          @?= ["ab  cd     !"]
+    , testCase "spare columns are shared by weight" $
+        map T.length (plainLinesAt 12 (hcat [render (grow 1) "a", render (grow 2) "b"])) @?= [12]
+    , testCase "fillWidth fills the output's width" $
+        plainLinesAt 6 (render (fillWidth <> align right) "ab") @?= ["    ab"]
+    , testCase "what a block cannot use goes to the others" $
+        plainLinesAt 12 (hcat [render (fillWidth <> maxWidth 4 <> bg red) "a", render fillWidth "b"])
+          @?= ["a   b       "]
+    , testCase "fillWidth with maxWidth fills up to the crop" $
+        plainLinesAt 20 (render (fillWidth <> maxWidth 5 <> align right) "ab") @?= ["   ab"]
+    , testCase "maxWidth crops instead of wrapping" $
+        plainLinesAt 20 (render (maxWidth 3) "abc def") @?= ["abc"]
+    , testCase "the widest block shrinks first" $
+        plainLinesAt 10 (hcat [text "aaa bbb ccc", text "|", text "dd"])
+          @?= ["aaa bbb|dd", "ccc       "]
+    , testCase "stretchHeight grows a box to the tallest in its row" $
+        plainLines (hcat [render (border normalBorder <> stretchHeight) "a", text "1\n2\n3\n4"])
+          @?= ["┌─┐1", "│a│2", "│ │3", "└─┘4"]
+    , testCase "stretched frames pass the height on to stretching content" $
+        plainLines (hcat [frame (border normalBorder <> stretchHeight) (render (bg red <> stretchHeight) "a"), text "1\n2\n3\n4"])
+          @?= ["┌─┐1", "│a│2", "│ │3", "└─┘4"]
+    , testCase "place without a width fills the space" $
+        plainLinesAt 5 (place (align center) "x") @?= ["  x  "]
+    , testCase "place keeps its natural width when there is no limit" $
+        plainLines (place (align center) "x") @?= ["x"]
+    , testCase "a column aligns blocks that do not grow" $
+        plainLinesAt 8 (joinVertical right [render fillWidth "abc", "d"])
+          @?= ["abc     ", "       d"]
+    ]
+
 -- | (min, max, weight) for a child of a row.
 newtype Child = Child (Int, Int, Int)
   deriving (Show)
@@ -900,6 +1044,15 @@ allocateTests =
               let ws = allocate w children
                in sum ws === max w (sum (map (min 1) los))
                     .&&. conjoin [min 1 lo <= a .&&. a <= lo | (a, lo) <- zip ws los]
+    , testProperty "growing children stay within their limits" $ \cs ->
+        forAll (vectorOf (length cs) (oneof [pure Nothing, Just <$> chooseInt (0, 40)])) $ \limits ->
+          let children = [(lo, hi, k, l) | (Child (lo, hi, k), l) <- zip cs limits]
+              his = [hi | (_, hi, _, _) <- children]
+              room = sum [if k > 0 then maybe 1000 (\lim -> max 0 (lim - hi)) l else 0 | (_, hi, k, l) <- children]
+           in forAll (chooseInt (sum his, sum his + 50)) $ \w ->
+                let ws = allocateWithin w children
+                 in conjoin [maybe True (\lim -> a <= max hi lim) l | (a, (_, hi, _, l)) <- zip ws children]
+                      .&&. sum ws === min w (sum his + room)
     , testCase "shrinks the widest first" $ allocate 10 [(1, 8, 0), (1, 3, 0), (1, 6, 0)] @?= [3, 3, 4]
     , testCase "spare space by weight, left first" $ allocate 10 [(1, 2, 1), (1, 2, 0), (1, 2, 2)] @?= [4, 2, 4]
     ]

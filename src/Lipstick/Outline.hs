@@ -51,6 +51,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Tree (Forest, Tree (..))
 import Lipstick.Internal.Grid
+import Lipstick.Internal.Layout (Block, fromGrid, layout)
 import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
 import Lipstick.Mod
 import Lipstick.Style (Style, frame, render)
@@ -104,33 +105,33 @@ treeDefaults =
 listDefaults = treeDefaults {outEnumerator = const bullet}
 
 -- | A tree: the root, then its children.
-tree :: Mod Outline -> Tree Grid -> Grid
+tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
   let (o, props) = runMod m treeDefaults
-      rootLines = [(fillOf (outRootStyle o), l) | l <- gridCells (frame (outRootStyle o) root)]
+      rootLines = [(fillOf (outRootStyle o), l) | l <- gridCells (layout Nothing (frame (outRootStyle o) root))]
    in finish o props (rootLines ++ items o 0 kids)
 
 -- | Trees without a common root, with tree branches.
-forest :: Mod Outline -> Forest Grid -> Grid
+forest :: Mod Outline -> Forest Block -> Block
 forest m kids = let (o, props) = runMod m treeDefaults in finish o props (items o 0 kids)
 
 -- | A list of items, with bullets.
-list :: Mod Outline -> [Grid] -> Grid
+list :: Mod Outline -> [Block] -> Block
 list m = nestedList m . map (`Node` [])
 
 -- | A list whose items can have nested items, with bullets.
-nestedList :: Mod Outline -> Forest Grid -> Grid
+nestedList :: Mod Outline -> Forest Block -> Block
 nestedList m kids = let (o, props) = runMod m listDefaults in finish o props (items o 0 kids)
 
 -- | Pad lines to the width (each with its own fill attributes) and the
 -- height, then apply the common properties.
-finish :: Outline -> Props -> [(Attrs, [Cell])] -> Grid
+finish :: Outline -> Props -> [(Attrs, [Cell])] -> Block
 finish o props ls =
-  let Size w h = outSize o
+  let Size w h _ _ = outSize o
       wide = maximum (fromMaybe 0 w : map (cellsWidth . snd) ls)
       padded = [alignCells a left wide l | (a, l) <- ls]
       tall = padded ++ replicate (fromMaybe 0 h - length padded) (blankCells mempty wide)
-   in withProps props tall
+   in fromGrid (withProps props tall)
 
 -- | The background (and reverse video) of a style, for padding.
 fillOf :: Mod Style -> Attrs
@@ -138,7 +139,7 @@ fillOf = fillAttrs . propAttrs . propsOf
 
 -- | The lines of a level of items, each with the fill attributes for
 -- padding it.
-items :: Outline -> Int -> Forest Grid -> [(Attrs, [Cell])]
+items :: Outline -> Int -> Forest Block -> [(Attrs, [Cell])]
 items o depth kids0 = concat (zipWith item [0 ..] kids)
   where
     kids =
@@ -148,7 +149,7 @@ items o depth kids0 = concat (zipWith item [0 ..] kids)
     n = length kids
     e = outEnumerator o depth
     pos i = ItemPos depth i n
-    styledLine m t = concat (take 1 (gridCells (render m (plain t))))
+    styledLine m t = concat (take 1 (gridCells (layout Nothing (render m (plain t)))))
     enumStyle i = outEnumStyle o (pos i)
     indentStyle i = maybe (enumStyle i) ($ pos i) (outIndentStyle o)
     markers = [styledLine (enumStyle i) (enumMarker e n i) | i <- [0 .. n - 1]]
@@ -161,7 +162,7 @@ items o depth kids0 = concat (zipWith item [0 ..] kids)
             fromMaybe (T.replicate markerW " ") (fmap (\f -> f n i) (outIndenter o) <|> enumIndent e n i)
           indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
           itemFill = fillOf (outItemStyle o (pos i))
-          body = case gridCells (frame (outItemStyle o (pos i)) b) of
+          body = case gridCells (layout Nothing (frame (outItemStyle o (pos i)) b)) of
             [] -> [[]]
             ls -> ls
        in [(itemFill, l) | l <- zipWith (++) (marker : repeat indent) body]

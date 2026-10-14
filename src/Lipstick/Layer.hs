@@ -33,6 +33,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
+import Lipstick.Internal.Layout (Block, fromGrid, layout)
 import Lipstick.Mod (Mod, fieldMod, runMod, withProps)
 
 data Layer = Layer
@@ -47,10 +48,10 @@ data Layer = Layer
 
 -- | A layer showing a block, at the origin unless moved with 'offset'. The
 -- layer's text attributes are the base for the block.
-layer :: Mod Layer -> Grid -> Layer
+layer :: Mod Layer -> Block -> Layer
 layer m b =
-  let (l, props) = runMod m (Layer 0 0 0 Nothing False [] b)
-   in l {layerBlock = withProps props (gridCells (layerBlock l))}
+  let (l, props) = runMod m (Layer 0 0 0 Nothing False [] emptyGrid)
+   in l {layerBlock = withProps props (gridCells (layout Nothing b))}
 
 -- | Move the layer right and down (relative to its parent, for sublayers).
 -- Parts moved off the top or left of the canvas are cut off.
@@ -87,9 +88,9 @@ flatten = sortOn layerZ . concatMap (go 0 0 0)
 data Slot = Start !Cell | Continued
 
 -- | Draw layers onto a canvas just big enough for all of them.
-compose :: [Layer] -> Grid
+compose :: [Layer] -> Block
 compose layers =
-  fromCellLines [row r | r <- [0 .. h - 1]]
+  fromGrid (fromCellLines [row r | r <- [0 .. h - 1]])
   where
     flat = flatten layers
     w = maximum (0 : [layerX l + gridWidth (layerBlock l) | l <- flat])
@@ -107,7 +108,7 @@ compose layers =
     blank = Cell mempty (T.singleton ' ') 1
 
 -- | Draw one block on top of another, at a column and row.
-overlay :: Int -> Int -> Grid -> Grid -> Grid
+overlay :: Int -> Int -> Block -> Block -> Block
 overlay x y top base = compose [layer mempty base, layer (offset x y) top]
 
 paintLayer :: Map (Int, Int) Slot -> Layer -> Map (Int, Int) Slot

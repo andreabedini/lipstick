@@ -121,6 +121,9 @@ module Lipstick.Mod
   , height
   , maxWidth
   , maxHeight
+  , grow
+  , fillWidth
+  , stretchHeight
   , unsetWidth
   , unsetHeight
   , unsetMaxWidth
@@ -269,11 +272,15 @@ borderEdges p =
 data Size = Size
   { sizeWidth :: !(Maybe Int)
   , sizeHeight :: !(Maybe Int)
+  , sizeGrow :: !Int
+  -- ^ weight for spare width; 0 for none
+  , sizeStretch :: !Bool
+  -- ^ grow to the height of the row
   }
   deriving (Eq, Show)
 
 defSize :: Size
-defSize = Size Nothing Nothing
+defSize = Size Nothing Nothing 0 False
 
 data Align = Align
   { alignH :: !Position
@@ -455,6 +462,21 @@ width n = sizeMod (\s -> s {sizeWidth = Just n})
 -- | Minimum total height, including padding and border.
 height :: HasSize f => Int -> Mod f
 height n = sizeMod (\s -> s {sizeHeight = Just n})
+
+-- | Take a share of the spare width, in proportion to the weight, when the
+-- thing is laid out next to others or on its own in the output's width.
+-- With a 'width', that width is the least it takes.
+grow :: HasSize f => Int -> Mod f
+grow k = sizeMod (\s -> s {sizeGrow = max 0 k})
+
+-- | Fill the width available: @grow 1@.
+fillWidth :: HasSize f => Mod f
+fillWidth = grow 1
+
+-- | Grow to the height of the row the thing is in (as the tallest thing
+-- next to it).
+stretchHeight :: HasSize f => Mod f
+stretchHeight = sizeMod (\s -> s {sizeStretch = True})
 
 -- | Crop the final result (for a style, margins included) to at most this
 -- many columns.

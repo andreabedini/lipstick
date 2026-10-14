@@ -12,7 +12,7 @@ module Svg (blockSvg) where
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Lipstick (ColorProfile (TrueColor), TermColor (..), resolveColor, termColorRGB)
+import Lipstick (Block, ColorProfile (TrueColor), TermColor (..), layout, resolveColor, termColorRGB)
 import Lipstick.Internal.Grid (Grid (..), Cell (..), gridCells)
 import Lipstick.Internal.Types (Attrs (..), Underline (..))
 import Numeric (showFFloat, showHex)
@@ -41,9 +41,9 @@ num x =
   let s = T.pack (showFFloat (Just 2) x "")
    in fromMaybe s (T.stripSuffix ".00" s)
 
--- | The block as an SVG document.
-blockSvg :: Grid -> Text
-blockSvg b =
+-- | The block, at its natural width, as an SVG document.
+blockSvg :: Block -> Text
+blockSvg block =
   T.unlines $
     [ "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" <> num totalW <> "\" height=\"" <> num totalH <> "\" viewBox=\"0 0 " <> num totalW <> " " <> num totalH <> "\">"
     , "<defs><filter id=\"shadow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"150%\"><feDropShadow dx=\"0\" dy=\"6\" stdDeviation=\"8\" flood-color=\"#000\" flood-opacity=\"0.45\"/></filter></defs>"
@@ -57,6 +57,7 @@ blockSvg b =
       ++ concat [foregrounds row cells | (row, cells) <- rows]
       ++ ["</g>", "</svg>"]
   where
+    b = layout Nothing block
     rows = zip [0 :: Int ..] (gridCells b)
     contentW = fromIntegral (gridWidth b) * cellW
     contentH = fromIntegral (gridHeight b) * cellH

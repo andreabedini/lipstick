@@ -97,6 +97,13 @@ place
 `frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
 stack blocks, and `blockWidth` / `blockHeight` measure them.
 
+A block does not have a fixed width: it is laid out in the width it is
+given, and text in it wraps to fit. `fillWidth` (or `grow n`) makes a block
+take the spare columns of its row, and `stretchHeight` makes it as tall as
+the tallest block next to it. `layout` lays a block out in a width, and the
+output functions use the width in the `RenderEnv` (with `Nothing`, every
+block is as wide as its text needs).
+
 ## Text
 
 Text with several styles is `Inline`, built with `styled` and `<>`. Styles
@@ -119,7 +126,7 @@ everything else:
 render (border roundedBorder) (fromAnsi "\ESC[1;32mok\ESC[0m 3 tests passed")
 ```
 
-Also: `wrap` (word wrap with extra break characters such as `-`),
+Also: `breakAfter` (wrap after extra characters such as `-`),
 `styleRanges` and `styleIndices` (highlight columns or characters of
 existing text, e.g. fuzzy-search matches), `transform`, `ansiWidth`.
 

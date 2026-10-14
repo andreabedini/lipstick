@@ -21,32 +21,35 @@ import Data.Text qualified as T
 import Data.Word (Word8)
 import Lipstick.Color
 import Lipstick.Internal.Grid
+import Lipstick.Internal.Layout (Block, layout)
 import Lipstick.Internal.Types
 
 -- | What the output can display.
 data RenderEnv = RenderEnv
   { envProfile :: !ColorProfile
   , envDarkBackground :: !Bool
+  , envWidth :: !(Maybe Int)
+  -- ^ the width blocks are laid out in; 'Nothing' for their natural width
   }
   deriving (Eq, Show)
 
--- | True colour on a dark background.
+-- | True colour on a dark background, blocks at their natural width.
 defaultRenderEnv :: RenderEnv
-defaultRenderEnv = RenderEnv TrueColor True
+defaultRenderEnv = RenderEnv TrueColor True Nothing
 
 -- | The block's lines, separated by newlines, without a trailing newline.
 -- Attributes are reset at the end of every line.
-toAnsi :: RenderEnv -> Grid -> Text
+toAnsi :: RenderEnv -> Block -> Text
 toAnsi env = T.intercalate (T.singleton '\n') . toAnsiLines env
 
 -- | The block's lines, each with its own escape sequences: attributes are
 -- reset and hyperlinks closed at the end of every line.
-toAnsiLines :: RenderEnv -> Grid -> [Text]
-toAnsiLines env = map (T.concat . renderLine env) . gridLines
+toAnsiLines :: RenderEnv -> Block -> [Text]
+toAnsiLines env = map (T.concat . renderLine env) . gridLines . layout (envWidth env)
 
 -- | The block as plain text, without any escape sequences.
-renderPlain :: Grid -> Text
-renderPlain = toAnsi (RenderEnv NoTTY True)
+renderPlain :: Block -> Text
+renderPlain = toAnsi (RenderEnv NoTTY True Nothing)
 
 -- | Fully resolved graphic rendition.
 data SGR = SGR
@@ -60,8 +63,8 @@ plainSGR :: SGR
 plainSGR = SGR Nothing Nothing Nothing False False False False False False NoUnderline
 
 resolveAttrs :: RenderEnv -> Attrs -> (SGR, Maybe Text)
-resolveAttrs (RenderEnv NoTTY _) _ = (plainSGR, Nothing)
-resolveAttrs (RenderEnv p dark) a =
+resolveAttrs (RenderEnv NoTTY _ _) _ = (plainSGR, Nothing)
+resolveAttrs (RenderEnv p dark _) a =
   ( SGR
       { sgrFg = col (attrFg a)
       , sgrBg = col (attrBg a)

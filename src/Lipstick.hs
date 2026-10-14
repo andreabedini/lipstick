@@ -28,6 +28,7 @@ module Lipstick
   , unsetInline
   , transform
   , unsetTransform
+  , breakAfter
   , colorWhitespace
   , underlineSpaces
   , strikethroughSpaces
@@ -36,14 +37,19 @@ module Lipstick
   , Block
   , blockWidth
   , blockHeight
+  , blockMinWidth
   , emptyBlock
   , text
   , fromInline
+  , layout
+  , Grid
+  , gridWidth
+  , gridHeight
+  , fromGrid
   , Inline
   , plain
   , styled
   , fromAnsi
-  , wrap
   , styleRanges
   , styleIndices
   , Attrs (..)
@@ -144,6 +150,9 @@ module Lipstick
   , height
   , maxWidth
   , maxHeight
+  , grow
+  , fillWidth
+  , stretchHeight
   , unsetWidth
   , unsetHeight
   , unsetMaxWidth

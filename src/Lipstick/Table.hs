@@ -27,7 +27,7 @@ import Data.List (intercalate, transpose)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (allocate)
+import Lipstick.Internal.Layout (Block, allocate, fromGrid, layout)
 import Lipstick.Internal.Types (Attrs (..), left)
 import Lipstick.Mod
 import Lipstick.Style (Style, render)
@@ -125,8 +125,8 @@ fitContent = fieldMod (\t -> t {tableFitContent = True})
 
 -- | A table with a header row (none if empty) and body rows. Short rows
 -- are padded with empty cells.
-table :: Mod Table -> [Inline] -> [[Inline]] -> Grid
-table m headers rows = fst (layoutTable m headers rows)
+table :: Mod Table -> [Inline] -> [[Inline]] -> Block
+table m headers rows = fromGrid (fst (layoutTable m headers rows))
 
 -- | The first and last body rows a table shows (the last is one less than
 -- the first when none are shown). All rows unless the table has a
@@ -145,7 +145,7 @@ layoutTable m headers rows
     sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
     -- Outer edges take their side's colours; inner rules take the top's.
     ba = sideAttrs sideTop
-    Size w hgt = tableSize t
+    Size w hgt _ _ = tableSize t
 
     ncols = maximum (0 : length headers : map length rows)
     padRow r = take ncols (r ++ repeat mempty)
@@ -162,7 +162,7 @@ layoutTable m headers rows
     natural =
       map
         (maximum . (0 :))
-        (transpose [[gridWidth (render (styleAt pos) c) | (pos, c) <- zip (cellPositions mk) r] | (mk, r) <- allRows])
+        (transpose [[gridWidth (renderGrid (styleAt pos) c) | (pos, c) <- zip (cellPositions mk) r] | (mk, r) <- allRows])
     sideW f e = if f edges then max 1 (textWidth e) else 0
     ruleW = if tableColumnRules t then max 1 (textWidth (leftEdge chars)) else 0
     frameW = sideW edgeLeft (leftEdge chars) + sideW edgeRight (rightEdge chars) + ruleW * (ncols - 1)
@@ -175,13 +175,14 @@ layoutTable m headers rows
     -- Cells rendered to their column width, as rows of cell lines.
     renderRow (mk, r) =
       let poss = cellPositions mk
-          first = [render (styleAt pos <> width cw) c | (pos, c, cw) <- zip3 poss r widths]
+          first = [renderGrid (styleAt pos <> width cw) c | (pos, c, cw) <- zip3 poss r widths]
           h = maximum (1 : map gridHeight first)
-          blocks = [render (styleAt pos <> width cw <> height h) c | (pos, c, cw) <- zip3 poss r widths]
+          blocks = [renderGrid (styleAt pos <> width cw <> height h) c | (pos, c, cw) <- zip3 poss r widths]
        in [ [alignCells mempty left cw (cropCells cw l) | (cw, l) <- zip widths ls]
           | ls <- transpose (map (padTo h . gridCells) blocks)
           ]
     padTo h ls = take h (ls ++ repeat [])
+    renderGrid sm c = layout Nothing (render sm c)
 
     piece a txt n = fillCells a txt n
     leftV = [piece (sideAttrs sideLeft) (leftEdge chars) (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]

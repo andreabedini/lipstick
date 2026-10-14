@@ -20,19 +20,20 @@ import Brick.Types (Widget)
 import Brick.Widgets.Core (raw)
 import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
-import Lipstick (ColorProfile (..), RenderEnv (..), TermColor (..), resolveColor)
+import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), layout, resolveColor)
 import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
 import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
--- | A fixed-size widget showing a block.
-blockWidget :: RenderEnv -> Grid -> Widget n
+-- | A fixed-size widget showing a block, laid out in the environment's
+-- width.
+blockWidget :: RenderEnv -> Block -> Widget n
 blockWidget env = raw . blockImage env
 
 -- | A vty image of a block, exactly as wide and tall as the block. vty has
 -- no images zero columns wide, so a block of width 0 gives 'V.emptyImage'
 -- whatever its height.
-blockImage :: RenderEnv -> Grid -> V.Image
-blockImage env b = V.vertCat (map line (gridLines b))
+blockImage :: RenderEnv -> Block -> V.Image
+blockImage env b = V.vertCat (map line (gridLines (layout (envWidth env) b)))
   where
     line (Line _ spans) = V.horizCat [V.text' (attr env a) t | Span a t _ <- spans]
 
@@ -46,7 +47,7 @@ profileForColorMode = \case
   V.FullColor -> TrueColor
 
 attr :: RenderEnv -> Attrs -> V.Attr
-attr (RenderEnv profile dark) a
+attr (RenderEnv profile dark _) a
   | profile == NoTTY = V.defAttr
   | otherwise =
       withColor V.withForeColor (attrFg a)

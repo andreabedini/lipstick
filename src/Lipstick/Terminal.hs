@@ -25,19 +25,19 @@ import Data.Maybe (fromMaybe)
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick.Ansi
 import Lipstick.Color (ColorProfile (..))
-import Lipstick.Internal.Grid (Grid)
+import Lipstick.Internal.Layout (Block)
 import System.Console.ANSI (ConsoleLayer (Background), hGetLayerColor, hNowSupportsANSI)
 import System.Environment (getEnvironment)
 import System.IO (Handle, hIsTerminalDevice, stdin, stdout)
 import System.Info (os)
 
 -- | Print a block to standard output, followed by a newline.
-putBlock :: Grid -> IO ()
+putBlock :: Block -> IO ()
 putBlock = hPutBlock stdout
 
 -- | Print a block to a handle, followed by a newline, downsampling colours
 -- to what the handle supports.
-hPutBlock :: Handle -> Grid -> IO ()
+hPutBlock :: Handle -> Block -> IO ()
 hPutBlock h b = do
   env <- detectEnv h
   hPutBlockWith env h b
@@ -49,7 +49,7 @@ hPutBlock h b = do
 -- The output is always UTF-8, whatever the handle's encoding: terminals
 -- expect it, and a locale such as @C@ (common in containers and cron jobs)
 -- would otherwise make the handle reject box-drawing characters.
-hPutBlockWith :: RenderEnv -> Handle -> Grid -> IO ()
+hPutBlockWith :: RenderEnv -> Handle -> Block -> IO ()
 hPutBlockWith env h b = case toAnsiLines env b of
   [] -> Utf8.hPutStrLn h mempty
   ls -> mapM_ (Utf8.hPutStrLn h) ls
@@ -61,7 +61,7 @@ detectEnv :: Handle -> IO RenderEnv
 detectEnv h = do
   profile <- detectProfile h
   vars <- getEnvironment
-  pure (RenderEnv profile (fromMaybe True (backgroundFromEnv vars)))
+  pure (RenderEnv profile (fromMaybe True (backgroundFromEnv vars)) Nothing)
 
 -- | Like 'detectEnv', but first asks the terminal for its background
 -- colour (see 'queryDarkBackground'). Call it once and keep the result.

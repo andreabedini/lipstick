@@ -30,8 +30,8 @@ warning = card <> bg "#F25D94"
 quickstart :: Block
 quickstart = render card "Hello, kitty"
 
-layout :: Block
-layout =
+joined :: Block
+joined =
   joinHorizontal
     center
     [ render card "Hello, kitty"
@@ -104,7 +104,7 @@ colours =
 examples :: [(String, Block)]
 examples =
   [ ("quickstart", quickstart)
-  , ("layout", layout)
+  , ("layout", joined)
   , ("place", placed)
   , ("text", inlineText)
   , ("table", languages)

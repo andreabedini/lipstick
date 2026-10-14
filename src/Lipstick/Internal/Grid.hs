@@ -11,6 +11,9 @@ module Lipstick.Internal.Grid
   , emptyGrid
   , fromCellLines
   , gridCells
+  , fitWidth
+  , joinGridsH
+  , joinGridsV
 
     -- * Cells
   , Cell (..)
@@ -23,6 +26,7 @@ module Lipstick.Internal.Grid
   , cropCells
   , wrapCells
   , wrapCellsWith
+  , wordWidths
   , truncateCells
   , overCellAttrs
 
@@ -34,7 +38,7 @@ module Lipstick.Internal.Grid
   ) where
 
 import Data.Function (on)
-import Data.List (groupBy)
+import Data.List (groupBy, transpose)
 import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -71,10 +75,6 @@ data Cell = Cell
   }
   deriving (Eq, Show)
 
--- | Unstyled text; lines are split on newlines.
-instance IsString Grid where
-  fromString = fromCellLines . inlineLines 4 . plain . T.pack
-
 -- | The block with no lines.
 emptyGrid :: Grid
 emptyGrid = Grid 0 0 []
@@ -87,6 +87,30 @@ fromCellLines ls =
 
 gridCells :: Grid -> [[Cell]]
 gridCells = map lineCells . gridLines
+
+-- | Exactly @w@ columns wide: lines are cropped, or padded on the right
+-- with unstyled blanks.
+fitWidth :: Int -> Grid -> Grid
+fitWidth w g
+  | gridWidth g == w = g
+  | otherwise = Grid w (gridHeight g) [cellsLine (alignCells mempty left w (cropCells w l)) | l <- gridCells g]
+
+-- | Grids side by side; the position aligns shorter ones vertically.
+joinGridsH :: Position -> [Grid] -> Grid
+joinGridsH p gs =
+  Grid (sum (map gridWidth gs)) h (map (cellsLine . concat) (transpose (map columnOf gs)))
+  where
+    h = maximum (0 : map gridHeight gs)
+    columnOf g =
+      let (before, after) = splitExtra p (h - gridHeight g)
+          blank = blankCells mempty (gridWidth g)
+       in replicate before blank ++ gridCells g ++ replicate after blank
+
+-- | Grids stacked in a column of a width; the position aligns narrower
+-- ones horizontally.
+joinGridsV :: Position -> Int -> [Grid] -> Grid
+joinGridsV p w gs =
+  Grid w (sum (map gridHeight gs)) [cellsLine (alignCells mempty p w l) | g <- gs, l <- gridCells g]
 
 cellsWidth :: [Cell] -> Int
 cellsWidth = sum . map cellWidth
@@ -146,17 +170,9 @@ wrapCells = wrapCellsWith []
 wrapCellsWith :: [Char] -> Int -> [Cell] -> [[Cell]]
 wrapCellsWith breakpoints w0 cells
   | cellsWidth cells <= w = [cells]
-  | otherwise = go [] 0 (tokens cells)
+  | otherwise = go [] 0 (wrapTokens breakpoints cells)
   where
     w = max 1 w0
-    isSpaceCell c = cellText c == T.singleton ' '
-    tokens = concatMap splitAfterBreaks . groupBy ((==) `on` isSpaceCell)
-    isBreak c = T.length (cellText c) == 1 && T.head (cellText c) `elem` breakpoints
-    splitAfterBreaks tok
-      | all isSpaceCell tok = [tok]
-      | otherwise = case break isBreak tok of
-          (a, b : rest) | not (null rest) -> (a ++ [b]) : splitAfterBreaks rest
-          _ -> [tok]
     isSpaceTok = all isSpaceCell
 
     -- acc holds the current line's tokens in reverse.
@@ -186,6 +202,26 @@ wrapCellsWith breakpoints w0 cells
         | cellWidth c <= n -> let (a, b) = takeWidth (n - cellWidth c) rest in (c : a, b)
         | n == w -> ([c], rest) -- a cluster wider than the line: take it anyway
       _ -> ([], cs)
+
+-- | The widths of the words of a line, as 'wrapCellsWith' sees them: the
+-- narrowest the line wraps to without breaking a word.
+wordWidths :: [Char] -> [Cell] -> [Int]
+wordWidths breakpoints cs = [cellsWidth t | t <- wrapTokens breakpoints cs, not (all isSpaceCell t)]
+
+-- | A line cut into runs of spaces and words, words also ending after any
+-- of the break characters.
+wrapTokens :: [Char] -> [Cell] -> [[Cell]]
+wrapTokens breakpoints = concatMap splitAfterBreaks . groupBy ((==) `on` isSpaceCell)
+  where
+    isBreak c = T.length (cellText c) == 1 && T.head (cellText c) `elem` breakpoints
+    splitAfterBreaks tok
+      | all isSpaceCell tok = [tok]
+      | otherwise = case break isBreak tok of
+          (a, b : rest) | not (null rest) -> (a ++ [b]) : splitAfterBreaks rest
+          _ -> [tok]
+
+isSpaceCell :: Cell -> Bool
+isSpaceCell c = cellText c == T.singleton ' '
 
 -- | Cut a line to at most @w@ columns, ending with an ellipsis when
 -- something was cut.

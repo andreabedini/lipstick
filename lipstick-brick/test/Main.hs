@@ -39,8 +39,8 @@ main =
           blockImage defaultRenderEnv (render (fg "200") "a") @?= V.text' (V.defAttr `V.withForeColor` V.Color240 184) "a"
       , testCase "light and dark backgrounds" $ do
           let b = render (fg (lightDark "1" "2")) "a"
-          blockImage (RenderEnv TrueColor False) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 1) "a"
-          blockImage (RenderEnv TrueColor True) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 2) "a"
+          blockImage (RenderEnv TrueColor False Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 1) "a"
+          blockImage (RenderEnv TrueColor True Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 2) "a"
       , testCase "colour modes" $ do
           profileForColorMode V.FullColor @?= TrueColor
           profileForColorMode (V.ColorMode240 240) @?= ANSI256
