@@ -103,7 +103,8 @@ them again, as its colours do: `render style text` is `frame style (fromInline t
 A block does not have a fixed width: it is laid out in the width it is
 given, and text in it wraps to fit. `fillWidth` (or `grow n`) makes a block
 take the spare columns of its row, and `stretchHeight` makes it as tall as
-the tallest block next to it. `layout` lays a block out in a width, and the
+the tallest block next to it. A `width` is kept when there is room for it;
+with less, the block shrinks like any other. `layout` lays a block out in a width, and the
 output functions use the width in the `RenderEnv` (with `Nothing`, every
 block is as wide as its text needs).
 

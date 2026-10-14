@@ -455,7 +455,9 @@ borderSide g = borderMod (\p -> p {borderSides = g (borderSides p)})
 sizeMod :: HasSize f => (Size -> Size) -> Mod f
 sizeMod = fieldMod . overSize
 
--- | Total width, including padding and border.
+-- | Total width, including padding and border, when there is room for
+-- it. Laid out in less space (a narrow terminal, a full row), the thing
+-- shrinks like any other rather than overflowing.
 width :: HasSize f => Int -> Mod f
 width n = sizeMod (\s -> s {sizeWidth = Just n})
 
