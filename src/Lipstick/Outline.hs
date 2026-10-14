@@ -51,7 +51,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Tree (Forest, Tree (..))
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Block, fromGrid, layout)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), cropLayoutWidth, layout, takenWidth)
 import Lipstick.Internal.Types (Attrs, fillAttrs, left, right)
 import Lipstick.Mod
 import Lipstick.Style (Style, frame, render)
@@ -85,8 +85,11 @@ data Outline = Outline
   , outOffset :: (Int, Int)
   }
 
--- | 'width' pads every line to at least that many columns, with the
--- background of its item's style; 'height' pads with blank lines.
+-- | Items are laid out in the width left after their indentation and
+-- enumerator, so their text wraps to fit. 'width' pads every line to at
+-- least that many columns, with the background of its item's style, and
+-- 'fillWidth' to the width the outline is given; 'height' pads with blank
+-- lines.
 instance HasSize Outline where
   overSize f o = o {outSize = f (outSize o)}
 
@@ -108,12 +111,11 @@ listDefaults = treeDefaults {outEnumerator = const bullet}
 tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
   let (o, props) = runMod m treeDefaults
-      rootLines = [(fillOf (outRootStyle o), l) | l <- gridCells (layout Nothing (frame (outRootStyle o) root))]
-   in finish o props (rootLines ++ items o 0 kids)
+   in outline o props (Entry [] [] [] (fillOf (outRootStyle o)) (frame (outRootStyle o) root) : items o 0 [] kids)
 
 -- | Trees without a common root, with tree branches.
 forest :: Mod Outline -> Forest Block -> Block
-forest m kids = let (o, props) = runMod m treeDefaults in finish o props (items o 0 kids)
+forest m kids = let (o, props) = runMod m treeDefaults in outline o props (items o 0 [] kids)
 
 -- | A list of items, with bullets.
 list :: Mod Outline -> [Block] -> Block
@@ -121,26 +123,62 @@ list m = nestedList m . map (`Node` [])
 
 -- | A list whose items can have nested items, with bullets.
 nestedList :: Mod Outline -> Forest Block -> Block
-nestedList m kids = let (o, props) = runMod m listDefaults in finish o props (items o 0 kids)
+nestedList m kids = let (o, props) = runMod m listDefaults in outline o props (items o 0 [] kids)
 
--- | Pad lines to the width (each with its own fill attributes) and the
--- height, then apply the common properties.
-finish :: Outline -> Props -> [(Attrs, [Cell])] -> Block
-finish o props ls =
-  let Size w h _ _ = outSize o
-      wide = maximum (fromMaybe 0 w : map (cellsWidth . snd) ls)
-      padded = [alignCells a left wide l | (a, l) <- ls]
-      tall = padded ++ replicate (fromMaybe 0 h - length padded) (blankCells mempty wide)
-   in fromGrid (withProps props tall)
+-- | An item of an outline, flattened: what goes before its lines, and the
+-- item itself, laid out in the width that is left.
+data Entry = Entry
+  { entryOuter :: [Cell]
+  -- ^ the indentation of the levels above, before every line
+  , entryMarker :: [Cell]
+  -- ^ before the first line: the enumerator
+  , entryIndent :: [Cell]
+  -- ^ before the other lines
+  , entryFill :: Attrs
+  -- ^ for padding the item's lines
+  , entryBlock :: Block
+  }
+
+-- | The columns before an entry's lines.
+prefixWidth :: Entry -> Int
+prefixWidth e = cellsWidth (entryOuter e) + max (cellsWidth (entryMarker e)) (cellsWidth (entryIndent e))
+
+-- | Entries laid out in the width they are given, padded to it (each line
+-- with its item's fill attributes) and to the height, with the common
+-- properties on top.
+outline :: Outline -> Props -> [Entry] -> Block
+outline o props entries = Block req run
+  where
+    Size wSet hSet weight _ = outSize o
+    natural = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMax (blockRequest (entryBlock e)) | e <- entries])
+    smallest = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMin (blockRequest (entryBlock e)) | e <- entries])
+    capW x = maybe x (min x . max 0) (propMaxWidth props)
+    capH x = maybe x (min x . max 0) (propMaxHeight props)
+    req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False
+    run (Assign w _) = (fitWidth w (withProps props tall), capH (max (fromMaybe 0 hSet) (sum (map snd laid))))
+      where
+        wide = cropLayoutWidth (propMaxWidth props) weight natural w
+        laid = map entryLines entries
+        padded = [alignCells a left wide l | (ls, _) <- laid, (a, l) <- ls]
+        tall = padded ++ replicate (fromMaybe 0 hSet - length padded) (blankCells mempty wide)
+        entryLines e =
+          let b = entryBlock e
+              (g, n) = blockLayout b (Assign (takenWidth (blockRequest b) (wide - prefixWidth e)) 0)
+              body = case gridCells g of
+                [] -> [[]]
+                ls -> ls
+           in ( [(entryFill e, entryOuter e ++ p ++ l) | (p, l) <- zip (entryMarker e : repeat (entryIndent e)) body]
+              , max 1 n
+              )
 
 -- | The background (and reverse video) of a style, for padding.
 fillOf :: Mod Style -> Attrs
 fillOf = fillAttrs . propAttrs . propsOf
 
--- | The lines of a level of items, each with the fill attributes for
--- padding it.
-items :: Outline -> Int -> Forest Block -> [(Attrs, [Cell])]
-items o depth kids0 = concat (zipWith item [0 ..] kids)
+-- | The entries of a level of items, below the indentation of the levels
+-- above.
+items :: Outline -> Int -> [Cell] -> Forest Block -> [Entry]
+items o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
   where
     kids =
       if depth == 0
@@ -155,18 +193,15 @@ items o depth kids0 = concat (zipWith item [0 ..] kids)
     markers = [styledLine (enumStyle i) (enumMarker e n i) | i <- [0 .. n - 1]]
     markerW = maximum (0 : map cellsWidth markers)
 
-    item i (Node b children) =
+    item i mk (Node b children) =
       let -- Alignment space keeps the enumerator's background, as lipgloss.
-          marker = alignCells (fillOf (enumStyle i)) right markerW (markers !! i)
+          marker = alignCells (fillOf (enumStyle i)) right markerW mk
           indentText =
             fromMaybe (T.replicate markerW " ") (fmap (\f -> f n i) (outIndenter o) <|> enumIndent e n i)
           indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
-          itemFill = fillOf (outItemStyle o (pos i))
-          body = case gridCells (layout Nothing (frame (outItemStyle o (pos i)) b)) of
-            [] -> [[]]
-            ls -> ls
-       in [(itemFill, l) | l <- zipWith (++) (marker : repeat indent) body]
-            ++ [(a, indent ++ l) | (a, l) <- items o (depth + 1) children]
+          itemStyle' = outItemStyle o (pos i)
+       in Entry outer marker indent (fillOf itemStyle') (frame itemStyle' b)
+            : items o (depth + 1) (outer ++ indent) children
 
 -- Styling ---------------------------------------------------------------------
 

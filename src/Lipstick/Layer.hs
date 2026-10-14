@@ -33,8 +33,8 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Block, fromGrid, layout)
-import Lipstick.Mod (Mod, fieldMod, runMod, withProps)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), takenWidth, usableWidth)
+import Lipstick.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
 
 data Layer = Layer
   { layerX :: !Int
@@ -43,15 +43,18 @@ data Layer = Layer
   , layerName :: !(Maybe Text)
   , layerTransparent :: !Bool
   , layerChildren :: [Layer]
-  , layerBlock :: Grid
+  , layerBlock :: Block
+  , layerProps :: Props
   }
 
 -- | A layer showing a block, at the origin unless moved with 'offset'. The
--- layer's text attributes are the base for the block.
+-- layer's text attributes are the base for the block. The block is laid
+-- out when the layers are composed, in the width of the canvas to the
+-- right of the layer.
 layer :: Mod Layer -> Block -> Layer
 layer m b =
-  let (l, props) = runMod m (Layer 0 0 0 Nothing False [] emptyGrid)
-   in l {layerBlock = withProps props (gridCells (layout Nothing b))}
+  let (l, props) = runMod m (Layer 0 0 0 Nothing False [] b defProps)
+   in l {layerProps = props}
 
 -- | Move the layer right and down (relative to its parent, for sublayers).
 -- Parts moved off the top or left of the canvas are cut off.
@@ -87,22 +90,63 @@ flatten = sortOn layerZ . concatMap (go 0 0 0)
 -- of a wide cluster starting to the left.
 data Slot = Start !Cell | Continued
 
--- | Draw layers onto a canvas just big enough for all of them.
+-- | Draw layers onto a canvas just big enough for all of them, or as wide
+-- as the space it is laid out in if a layer grows.
 compose :: [Layer] -> Block
-compose layers =
-  fromGrid (fromCellLines [row r | r <- [0 .. h - 1]])
+compose layers = Block req run
   where
     flat = flatten layers
-    w = maximum (0 : [layerX l + gridWidth (layerBlock l) | l <- flat])
-    h = maximum (0 : [layerY l + gridHeight (layerBlock l) | l <- flat])
+    req = canvasRequest flat
+    run (Assign w _) =
+      let g = fitWidth w (canvas w (drawLayers w flat))
+       in (g, gridHeight g)
 
-    canvas = foldl paintLayer Map.empty flat
+-- | What a canvas of layers asks for: room for each layer to the right of
+-- its column.
+canvasRequest :: [Layer] -> Request
+canvasRequest flat =
+  Request
+    { reqMin = maximum (0 : [max 0 (layerX l + reqMin r) | (l, r) <- rs])
+    , reqMax = maximum (0 : [max 0 (layerX l + reqMax r) | (l, r) <- rs])
+    , reqGrow = maximum (0 : map (reqGrow . snd) rs)
+    , reqLimit = maximum . (0 :) <$> traverse (\(l, r) -> (layerX l +) <$> usableWidth r) rs
+    , reqStretch = False
+    }
+  where
+    rs = [(l, layerRequest l) | l <- flat]
+
+-- | A layer's request, within its 'Lipstick.Mod.maxWidth' crop.
+layerRequest :: Layer -> Request
+layerRequest l =
+  let r = blockRequest (layerBlock l)
+      cap x = maybe x (min x . max 0) (propMaxWidth (layerProps l))
+   in r {reqMin = cap (reqMin r), reqMax = cap (reqMax r), reqLimit = cap <$> reqLimit r}
+
+-- | Absolute layers laid out in a canvas width: each takes what it needs
+-- of the columns to its right.
+drawLayers :: Int -> [Layer] -> [(Layer, Grid)]
+drawLayers w flat =
+  [ (l, withProps (layerProps l) (gridCells (fst (blockLayout (layerBlock l) (Assign lw 0)))))
+  | l <- flat
+  , let lw = takenWidth (layerRequest l) (w - layerX l)
+  ]
+
+-- | The width a canvas of layers takes in an available width, as for
+-- 'Lipstick.Block.layout'.
+canvasWidth :: Maybe Int -> [Layer] -> Int
+canvasWidth avail flat = let r = canvasRequest flat in maybe (reqMax r) (takenWidth r) avail
+
+canvas :: Int -> [(Layer, Grid)] -> Grid
+canvas w drawn = fromCellLines [row r | r <- [0 .. h - 1]]
+  where
+    h = maximum (0 : [layerY l + gridHeight g | (l, g) <- drawn])
+    painted = foldl paintLayer Map.empty drawn
 
     row r = go 0
       where
         go c
           | c >= w = []
-          | otherwise = case Map.lookup (r, c) canvas of
+          | otherwise = case Map.lookup (r, c) painted of
               Just (Start cell) -> cell : go (c + max 1 (cellWidth cell))
               _ -> blank : go (c + 1)
     blank = Cell mempty (T.singleton ' ') 1
@@ -111,8 +155,8 @@ compose layers =
 overlay :: Int -> Int -> Block -> Block -> Block
 overlay x y top base = compose [layer mempty base, layer (offset x y) top]
 
-paintLayer :: Map (Int, Int) Slot -> Layer -> Map (Int, Int) Slot
-paintLayer canvas l = foldl paintRow canvas (zip [layerY l ..] (gridCells (layerBlock l)))
+paintLayer :: Map (Int, Int) Slot -> (Layer, Grid) -> Map (Int, Int) Slot
+paintLayer painted (l, g) = foldl paintRow painted (zip [layerY l ..] (gridCells g))
   where
     paintRow m (r, cells)
       | r < 0 = m
@@ -175,26 +219,35 @@ data Rect = Rect
   }
   deriving (Eq, Show)
 
-bounds :: Layer -> Rect
-bounds l = Rect (layerX l) (layerY l) (gridWidth (layerBlock l)) (gridHeight (layerBlock l))
+bounds :: (Layer, Grid) -> Rect
+bounds (l, g) = Rect (layerX l) (layerY l) (gridWidth g) (gridHeight g)
 
 contains :: Int -> Int -> Rect -> Bool
 contains x y (Rect rx ry w h) = x >= rx && x < rx + w && y >= ry && y < ry + h
 
--- | The topmost named layer covering a column and row, for mouse handling.
-layerAt :: Int -> Int -> [Layer] -> Maybe Text
-layerAt x y = fmap fst . layerHit x y
+-- | Layers laid out as 'compose' lays them out in an available width
+-- ('Nothing' for its natural width), topmost first.
+topmostFirst :: Maybe Int -> [Layer] -> [(Layer, Grid)]
+topmostFirst avail layers =
+  let flat = flatten layers
+   in reverse (drawLayers (canvasWidth avail flat) flat)
+
+-- | The topmost named layer covering a column and row, for mouse handling,
+-- with the layers composed in an available width ('Nothing' for their
+-- natural width).
+layerAt :: Maybe Int -> Int -> Int -> [Layer] -> Maybe Text
+layerAt avail x y = fmap fst . layerHit avail x y
 
 -- | Like 'layerAt', with where the layer is drawn.
-layerHit :: Int -> Int -> [Layer] -> Maybe (Text, Rect)
-layerHit x y layers =
+layerHit :: Maybe Int -> Int -> Int -> [Layer] -> Maybe (Text, Rect)
+layerHit avail x y layers =
   listToMaybe
-    [ (name, bounds l)
-    | l <- reverse (flatten layers)
+    [ (name, bounds d)
+    | d@(l, _) <- topmostFirst avail layers
     , Just name <- [layerName l]
-    , contains x y (bounds l)
+    , contains x y (bounds d)
     ]
 
 -- | Where the layer with an id is drawn (the topmost, if several share it).
-findLayer :: Text -> [Layer] -> Maybe Rect
-findLayer name layers = listToMaybe [bounds l | l <- reverse (flatten layers), layerName l == Just name]
+findLayer :: Maybe Int -> Text -> [Layer] -> Maybe Rect
+findLayer avail name layers = listToMaybe [bounds d | d@(l, _) <- topmostFirst avail layers, layerName l == Just name]

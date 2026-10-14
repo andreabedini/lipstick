@@ -390,16 +390,16 @@ layerTests =
         plainLines (overlay 0 0 "a\x200B\&b" "....") @?= ["ab.."]
     , testCase "layerHit and findLayer report bounds" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 0 <> sublayers [layer (offset 1 1 <> layerId "btn") "ok"]) "x"]
-        layerHit 2 1 ls @?= Just ("btn", Rect 2 1 2 1)
-        layerHit 0 1 ls @?= Just ("bg", Rect 0 0 4 2)
-        findLayer "btn" ls @?= Just (Rect 2 1 2 1)
-        findLayer "nope" ls @?= Nothing
+        layerHit Nothing 2 1 ls @?= Just ("btn", Rect 2 1 2 1)
+        layerHit Nothing 0 1 ls @?= Just ("bg", Rect 0 0 4 2)
+        findLayer Nothing "btn" ls @?= Just (Rect 2 1 2 1)
+        findLayer Nothing "nope" ls @?= Nothing
     , testCase "layerAt finds the topmost named layer" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 1 <> layerId "btn") "ok", layer (offset 0 0) "x"]
-        layerAt 1 1 ls @?= Just "btn"
-        layerAt 3 1 ls @?= Just "bg"
-        layerAt 0 0 ls @?= Just "bg"
-        layerAt 9 9 ls @?= Nothing
+        layerAt Nothing 1 1 ls @?= Just "btn"
+        layerAt Nothing 3 1 ls @?= Just "bg"
+        layerAt Nothing 0 0 ls @?= Just "bg"
+        layerAt Nothing 9 9 ls @?= Nothing
     , testProperty "compose is rectangular and fits its layers" $ \placed ->
         let ls = [layer (offset x y <> zIndex z) (render (specMod s) "日本 text") | (s, (NonNegative x, NonNegative y, z)) <- take 4 placed]
             b = compose ls
@@ -577,19 +577,19 @@ tableParityTests =
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "│1│row │", "│…│…   │", "╰─┴────╯"]
     , testCase "yOffset scrolls" $ do
         take 2 (drop 3 (plainLines (table (height 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
-        visibleRows (height 7 <> yOffset 4) ["N", "What"] numbered @?= (4, 5)
+        visibleRows Nothing (height 7 <> yOffset 4) ["N", "What"] numbered @?= (4, 5)
     , testCase "scrolled to the end, earlier rows fill the space" $ do
-        visibleRows (height 7 <> yOffset 9) ["N", "What"] numbered @?= (7, 9)
-        visibleRows (height 7 <> yOffset 99) ["N", "What"] numbered @?= (7, 9)
+        visibleRows Nothing (height 7 <> yOffset 9) ["N", "What"] numbered @?= (7, 9)
+        visibleRows Nothing (height 7 <> yOffset 99) ["N", "What"] numbered @?= (7, 9)
     , testCase "all rows without a height" $
-        visibleRows mempty ["N"] numbered @?= (0, 9)
+        visibleRows Nothing mempty ["N"] numbered @?= (0, 9)
     , testCase "row rules count towards the height" $
         plainLines (table (height 8 <> rowRules True <> border asciiBorder) [] numbered)
           -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
           -- a third row would need 7.
           @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
     , testCase "too small for any row" $ do
-        visibleRows (height 3) ["N"] numbered @?= (0, -1)
+        visibleRows Nothing (height 3) ["N"] numbered @?= (0, -1)
         blockHeight (table (height 3) ["N"] numbered) @?= 3
     , testCase "fitContent does not stretch" $
         plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
@@ -882,7 +882,11 @@ data Shape
   | ShapeColumn Int [Shape]
   | ShapePlace (Maybe Int) Bool Shape
   -- ^ width, stretches
-  | ShapeTable [[Text]]
+  | ShapeTable (Maybe Int) Bool [[Text]]
+  -- ^ width, grows
+  | ShapeList Bool [Shape]
+  | ShapeTree Shape [Shape]
+  | ShapeLayers [((Int, Int), Shape)]
   | ShapeEmpty
   deriving (Show)
 
@@ -898,6 +902,9 @@ instance Arbitrary Shape where
               , (2, ShapeRow <$> chooseInt (0, 2) <*> children n)
               , (2, ShapeColumn <$> chooseInt (0, 2) <*> children n)
               , (1, ShapePlace <$> oneof [pure Nothing, Just <$> chooseInt (0, 30)] <*> arbitrary <*> go (n `div` 2))
+              , (1, ShapeList <$> arbitrary <*> children n)
+              , (1, ShapeTree <$> go (n `div` 2) <*> children n)
+              , (1, ShapeLayers <$> (zip <$> vectorOf 3 ((,) <$> chooseInt (-2, 8) <*> chooseInt (0, 3)) <*> children n))
               ]
       children n = do
         k <- chooseInt (0, 3)
@@ -906,7 +913,7 @@ instance Arbitrary Shape where
         frequency
           [ (2, (\(Words t) -> ShapeText t) <$> arbitrary)
           , (3, (\spec g st (Words t) -> ShapeRender spec g st t) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
-          , (1, ShapeTable <$> vectorOf 2 (vectorOf 2 ((\(Words t) -> t) <$> arbitrary)))
+          , (1, ShapeTable <$> oneof [pure Nothing, Just <$> chooseInt (0, 30)] <*> arbitrary <*> vectorOf 2 (vectorOf 2 ((\(Words t) -> t) <$> arbitrary)))
           , (1, pure ShapeEmpty)
           ]
 
@@ -918,7 +925,10 @@ toBlock = \case
   ShapeRow p shs -> joinHorizontal ([top, center, bottom] !! p) (map toBlock shs)
   ShapeColumn p shs -> joinVertical ([left, center, right] !! p) (map toBlock shs)
   ShapePlace w st sh -> place (maybe mempty width w <> (if st then stretchHeight else mempty) <> align center) (toBlock sh)
-  ShapeTable rows -> table (width 20) ["a", "b"] (map (map plain) rows)
+  ShapeTable w g rows -> table (maybe mempty width w <> (if g then fillWidth else mempty)) ["a", "b"] (map (map plain) rows)
+  ShapeList g shs -> list (if g then fillWidth else mempty) (map toBlock shs)
+  ShapeTree root shs -> tree mempty (Node (toBlock root) [Node (toBlock sh) [] | sh <- shs])
+  ShapeLayers ls -> compose [layer (offset x y) (toBlock sh) | ((x, y), sh) <- ls]
   ShapeEmpty -> emptyBlock
   where
     flags g st = (if g then fillWidth else mempty) <> (if st then stretchHeight else mempty)
@@ -999,6 +1009,38 @@ deferredLayoutTests =
         plainLinesAt 5 (place (align center) "x") @?= ["  x  "]
     , testCase "place keeps its natural width when there is no limit" $
         plainLines (place (align center) "x") @?= ["x"]
+    , testCase "a table fits the width it is given, wrapping its cells" $
+        -- Columns shrink widest first, down to one column, as in lipgloss.
+        plainLinesAt 17 (table mempty ["Name", "Notes"] [["lipstick", "styled text for terminals"]])
+          @?= [ "╭───────┬───────╮"
+              , "│Name   │Notes  │"
+              , "├───────┼───────┤"
+              , "│lipstic│styled │"
+              , "│k      │text   │"
+              , "│       │for    │"
+              , "│       │termina│"
+              , "│       │ls     │"
+              , "╰───────┴───────╯"
+              ]
+    , testCase "a table with fillWidth grows its columns to fill the width" $
+        plainLinesAt 13 (table fillWidth ["a", "b"] [["1", "2"]])
+          @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]
+    , testCase "which rows a table shows depends on its width" $ do
+        let rows = [[plain (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
+        visibleRows Nothing (height 8) ["N", "What"] rows @?= (0, 2)
+        visibleRows (Just 9) (height 8) ["N", "What"] rows @?= (0, 0)
+    , testCase "list items wrap after their enumerator" $
+        plainLinesAt 10 (list mempty ["one two three", "four"])
+          @?= ["• one two ", "  three   ", "• four    "]
+    , testCase "tree items wrap inside their branch" $
+        plainLinesAt 12 (tree mempty (Node "root" [Node "alpha beta gamma" [], Node "delta" []]))
+          @?= ["root        ", "├── alpha   ", "│   beta    ", "│   gamma   ", "└── delta   "]
+    , testCase "an outline with fillWidth pads to the width" $
+        plainLinesAt 8 (list (fillWidth <> bg red) ["a"]) @?= ["• a     "]
+    , testCase "a layer reflows in a narrow canvas" $ do
+        let ls = [layer mempty (text "aaaa bbbb"), layer (offset 2 0 <> layerId "top") "x"]
+        plainLinesAt 6 (compose ls) @?= ["aaxa  ", "bbbb  "]
+        findLayer (Just 6) "top" ls @?= Just (Rect 2 0 1 1)
     , testCase "a column aligns blocks that do not grow" $
         plainLinesAt 8 (joinVertical right [render fillWidth "abc", "d"])
           @?= ["abc     ", "       d"]

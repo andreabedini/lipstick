@@ -151,8 +151,10 @@ table
 
 ![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
 
-With a `width`, columns shrink (wrapping their cells) or grow to fit it;
-`fitContent` makes the width a maximum instead. With a `height`, rows that
+A table fits the width it is laid out in: columns shrink, widest first,
+wrapping their cells, and with `fillWidth` they grow to fill it. With a
+`width`, columns shrink or grow to fit that instead; `fitContent` makes the
+width a maximum. With a `height`, rows that
 do not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
 which rows are shown. `headerRule`, `columnRules`, `rowRules` and the
 `border*` modifiers choose which lines are drawn.
@@ -177,6 +179,7 @@ nestedList
 The enumerators are `treeEnumerator`, `roundedTreeEnumerator`, `bullet`,
 `dash`, `asterisk`, `arabic`, `alphabet` and `roman`, or your own. Items,
 enumerators and indentation are styled separately, by position if needed.
+Items wrap in the width left after their indentation.
 
 ## Layers
 

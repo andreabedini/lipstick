@@ -24,11 +24,12 @@ module Lipstick.Table
   ) where
 
 import Data.List (intercalate, transpose)
+import Data.Maybe (isJust)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Block, allocate, fromGrid, layout)
-import Lipstick.Internal.Types (Attrs (..), left)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), allocate, cropLayoutWidth, takenWidth)
+import Lipstick.Internal.Types (Attrs (..))
 import Lipstick.Mod
 import Lipstick.Style (Style, render)
 import Lipstick.Width (textWidth)
@@ -63,8 +64,10 @@ data Table = Table
 instance HasBorder Table where
   overBorder f t = t {tableBorder = f (tableBorder t)}
 
--- | 'width' is the total width of the table: columns shrink (wrapping their
--- text) or grow to fit. 'height' is the most lines the table takes: body
+-- | Without a 'width', columns are as wide as their cells need, and shrink
+-- (wrapping their text), widest first, when the table is laid out in less
+-- space; with 'fillWidth', they grow to fill it. 'width' is the total width
+-- of the table: columns shrink or grow to fit it. 'height' is the most lines the table takes: body
 -- rows that do not fit are replaced by a row of ellipses, starting from
 -- the row set by 'yOffset'.
 instance HasSize Table where
@@ -124,20 +127,28 @@ fitContent :: Mod Table
 fitContent = fieldMod (\t -> t {tableFitContent = True})
 
 -- | A table with a header row (none if empty) and body rows. Short rows
--- are padded with empty cells.
+-- are padded with empty cells. Its columns fit the width the table is
+-- laid out in (see 'HasSize').
 table :: Mod Table -> [Inline] -> [[Inline]] -> Block
-table m headers rows = fromGrid (fst (layoutTable m headers rows))
+table m headers rows = Block req (\(Assign w _) -> let (g, _) = run w in (g, gridHeight g))
+  where
+    (req, run) = tableLayout m headers rows
 
--- | The first and last body rows a table shows (the last is one less than
--- the first when none are shown). All rows unless the table has a
--- 'height'.
-visibleRows :: Mod Table -> [Inline] -> [[Inline]] -> (Int, Int)
-visibleRows m headers rows = snd (layoutTable m headers rows)
+-- | The first and last body rows a table shows, laid out in an available
+-- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout'.
+-- The last is one less than the first when none are shown. All rows unless
+-- the table has a 'height'.
+visibleRows :: Maybe Int -> Mod Table -> [Inline] -> [[Inline]] -> (Int, Int)
+visibleRows avail m headers rows = snd (run (maybe (reqMax req) (takenWidth req) avail))
+  where
+    (req, run) = tableLayout m headers rows
 
-layoutTable :: Mod Table -> [Inline] -> [[Inline]] -> (Grid, (Int, Int))
-layoutTable m headers rows
-  | ncols == 0 = (emptyGrid, (0, -1))
-  | otherwise = (withProps props (maybe allLines (`take` allLines) hgt), (firstV, lastV))
+-- | What a table asks for, and how it lays out at a width, with the body
+-- rows it shows.
+tableLayout :: Mod Table -> [Inline] -> [[Inline]] -> (Request, Int -> (Grid, (Int, Int)))
+tableLayout m headers rows
+  | ncols == 0 = (Request 0 0 0 Nothing False, \w -> (Grid w 0 [], (0, -1)))
+  | otherwise = (req, run)
   where
     (t, props) = runMod m defTable
     (chars, edges) = borderEdges (tableBorder t)
@@ -145,91 +156,92 @@ layoutTable m headers rows
     sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
     -- Outer edges take their side's colours; inner rules take the top's.
     ba = sideAttrs sideTop
-    Size w hgt _ _ = tableSize t
+    Size wSet hgt weight _ = tableSize t
 
     ncols = maximum (0 : length headers : map length rows)
     padRow r = take ncols (r ++ repeat mempty)
-    allRows =
-      [(HeaderCell, padRow headers) | not (null headers)]
-        ++ [(BodyCell i, padRow r) | (i, r) <- zip [0 ..] rows]
+    headerRow = [(HeaderCell, padRow headers) | not (null headers)]
+    bodyRows = [(BodyCell i, padRow r) | (i, r) <- zip [0 ..] rows]
 
-    styleAt pos = tableCellStyle t pos <> case pos of
+    -- Cells stretch to the height of their row.
+    cellBlock pos = render $ tableCellStyle t pos <> stretchHeight <> case pos of
       HeaderCell _ -> noWrap
       BodyCell _ _ -> if tableWrap t then mempty else noWrap
-    cellPositions mk = map mk [0 .. ncols - 1]
+    cellBlocks (mk, r) = [cellBlock (mk c) inl | (c, inl) <- zip [0 ..] r]
 
     -- Column widths.
-    natural =
-      map
-        (maximum . (0 :))
-        (transpose [[gridWidth (renderGrid (styleAt pos) c) | (pos, c) <- zip (cellPositions mk) r] | (mk, r) <- allRows])
+    natural = map (maximum . (0 :)) (transpose (map (map (reqMax . blockRequest) . cellBlocks) (headerRow ++ bodyRows)))
     sideW f e = if f edges then max 1 (textWidth e) else 0
     ruleW = if tableColumnRules t then max 1 (textWidth (leftEdge chars)) else 0
     frameW = sideW edgeLeft (leftEdge chars) + sideW edgeRight (rightEdge chars) + ruleW * (ncols - 1)
-    -- Columns shrink to one column, widest first; with fitContent they
-    -- do not grow past their natural width.
-    widths = case w of
-      Nothing -> natural
-      Just total -> allocate (total - frameW) [(min 1 n, n, if tableFitContent t then 0 else 1) | n <- natural]
+    smallest = sum (map (min 1) natural) + frameW
+    full = sum natural + frameW
+    capW x = maybe x (min x . max 0) (propMaxWidth props)
+    -- The narrowest and natural widths, before a maxWidth crop.
+    (lo, hi) = case wSet of
+      Just n
+        | tableFitContent t -> (min n smallest, min n full)
+        | otherwise -> (n, n)
+      Nothing -> (smallest, full)
+    req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) False
+    -- Columns grow to a set width (unless they fit their content) or when
+    -- the table grows; they shrink, widest first, down to one column.
+    columnWeight = if tableFitContent t || (not (isJust wSet) && weight == 0) then 0 else 1
 
-    -- Cells rendered to their column width, as rows of cell lines.
-    renderRow (mk, r) =
-      let poss = cellPositions mk
-          first = [renderGrid (styleAt pos <> width cw) c | (pos, c, cw) <- zip3 poss r widths]
-          h = maximum (1 : map gridHeight first)
-          blocks = [renderGrid (styleAt pos <> width cw <> height h) c | (pos, c, cw) <- zip3 poss r widths]
-       in [ [alignCells mempty left cw (cropCells cw l) | (cw, l) <- zip widths ls]
-          | ls <- transpose (map (padTo h . gridCells) blocks)
-          ]
-    padTo h ls = take h (ls ++ repeat [])
-    renderGrid sm c = layout Nothing (render sm c)
+    run w = (fitWidth w (withProps props (maybe allLines (`take` allLines) hgt)), (firstV, lastV))
+      where
+        tableW = cropLayoutWidth (propMaxWidth props) weight hi w
+        widths = allocate (tableW - frameW) [(min 1 n, n, columnWeight) | n <- natural]
 
-    piece a txt n = fillCells a txt n
-    leftV = [piece (sideAttrs sideLeft) (leftEdge chars) (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
-    rightV = [piece (sideAttrs sideRight) (rightEdge chars) (sideW edgeRight (rightEdge chars)) | edgeRight edges]
-    colRule = [piece ba (leftEdge chars) ruleW | tableColumnRules t]
-    line cellsOf = concat (leftV ++ [intercalate (concat colRule) cellsOf] ++ rightV)
-    rule a l mid r edge =
-      concat
-        ( [piece a l (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
-            ++ [intercalate (concat [piece a mid ruleW | tableColumnRules t]) [piece a edge cw | cw <- widths]]
-            ++ [piece a r (sideW edgeRight (rightEdge chars)) | edgeRight edges]
-        )
+        -- A row's cells at their column widths, stretched to the tallest:
+        -- one layout per cell. Its natural height is the number of lines.
+        renderRow row =
+          let results = [blockLayout b (Assign cw rowH) | (b, cw) <- zip (cellBlocks row) widths]
+              rowH = maximum (1 : map snd results)
+           in map line (transpose [gridCells g | (g, _) <- results])
 
-    headerLines = concat [map line (renderRow row) | row@(mk, _) <- allRows, isHeader mk]
-    isHeader mk = case mk 0 of
-      HeaderCell _ -> True
-      BodyCell _ _ -> False
-    nBody = length rows
-    bodyRow i = map line (renderRow (BodyCell i, padRow (rows !! i)))
-    bodyLines = map bodyRow [0 .. nBody - 1]
-    overflowRow i = map line (renderRow (BodyCell i, replicate ncols (plain (T.singleton '…'))))
+        piece a txt n = fillCells a txt n
+        leftV = [piece (sideAttrs sideLeft) (leftEdge chars) (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
+        rightV = [piece (sideAttrs sideRight) (rightEdge chars) (sideW edgeRight (rightEdge chars)) | edgeRight edges]
+        colRule = [piece ba (leftEdge chars) ruleW | tableColumnRules t]
+        line cellsOf = concat (leftV ++ [intercalate (concat colRule) cellsOf] ++ rightV)
+        rule a l mid r edge =
+          concat
+            ( [piece a l (sideW edgeLeft (leftEdge chars)) | edgeLeft edges]
+                ++ [intercalate (concat [piece a mid ruleW | tableColumnRules t]) [piece a edge cw | cw <- widths]]
+                ++ [piece a r (sideW edgeRight (rightEdge chars)) | edgeRight edges]
+            )
 
-    middleRule = rule ba (middleLeft chars) (middle chars) (middleRight chars) (topEdge chars)
-    topLines = [rule ba (topLeftCorner chars) (middleTop chars) (topRightCorner chars) (topEdge chars) | edgeTop edges]
-    headerRuleLines = [middleRule | tableHeaderRule t, not (null headerLines), nBody > 0]
-    bottomLines = [rule (sideAttrs sideBottom) (bottomLeftCorner chars) (middleBottom chars) (bottomRightCorner chars) (bottomEdge chars) | edgeBottom edges]
+        headerLines = concatMap renderRow headerRow
+        nBody = length rows
+        bodyLines = map renderRow bodyRows
+        overflowRow i = renderRow (BodyCell i, replicate ncols (plain (T.singleton '…')))
 
-    -- Which body rows to show.
-    rr = if tableRowRules t then 1 else 0
-    heights = map length bodyLines
-    -- Lines taken by rows f..l, plus an overflow row if rows remain.
-    linesFor f l =
-      sum (take (l - f + 1) (drop f heights))
-        + rr * max 0 (l - f)
-        + (if l < nBody - 1 then (if l >= f then rr else 0) + length (overflowRow (l + 1)) else 0)
-    (firstV, lastV) = case hgt of
-      Nothing -> (0, nBody - 1)
-      Just h ->
-        let avail = h - length topLines - length headerLines - length headerRuleLines - length bottomLines
-            f0 = max 0 (min (nBody - 1) (tableYOffset t))
-            l0 = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= avail) [f0 .. nBody - 1])
-            f1 =
-              if l0 == nBody - 1
-                then last (f0 : takeWhile (\f -> linesFor f l0 <= avail) [f0 - 1, f0 - 2 .. 0])
-                else f0
-         in (f1, l0)
-    shown = [bodyLines !! i | i <- [firstV .. lastV]]
-    overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
-    body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
-    allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ bottomLines
+        middleRule = rule ba (middleLeft chars) (middle chars) (middleRight chars) (topEdge chars)
+        topLines = [rule ba (topLeftCorner chars) (middleTop chars) (topRightCorner chars) (topEdge chars) | edgeTop edges]
+        headerRuleLines = [middleRule | tableHeaderRule t, not (null headerLines), nBody > 0]
+        bottomLines = [rule (sideAttrs sideBottom) (bottomLeftCorner chars) (middleBottom chars) (bottomRightCorner chars) (bottomEdge chars) | edgeBottom edges]
+
+        -- Which body rows to show.
+        rr = if tableRowRules t then 1 else 0
+        heights = map length bodyLines
+        -- Lines taken by rows f..l, plus an overflow row if rows remain.
+        linesFor f l =
+          sum (take (l - f + 1) (drop f heights))
+            + rr * max 0 (l - f)
+            + (if l < nBody - 1 then (if l >= f then rr else 0) + length (overflowRow (l + 1)) else 0)
+        (firstV, lastV) = case hgt of
+          Nothing -> (0, nBody - 1)
+          Just h ->
+            let avail = h - length topLines - length headerLines - length headerRuleLines - length bottomLines
+                f0 = max 0 (min (nBody - 1) (tableYOffset t))
+                l0 = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= avail) [f0 .. nBody - 1])
+                f1 =
+                  if l0 == nBody - 1
+                    then last (f0 : takeWhile (\f -> linesFor f l0 <= avail) [f0 - 1, f0 - 2 .. 0])
+                    else f0
+             in (f1, l0)
+        shown = take (lastV - firstV + 1) (drop firstV bodyLines)
+        overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
+        body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
+        allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ bottomLines

@@ -27,6 +27,7 @@ module Lipstick.Internal.Layout
   , takenWidth
   , addLimits
   , maxLimit
+  , usableWidth
 
     -- * Sharing out width
   , allocate
@@ -91,16 +92,16 @@ takenWidth r avail
 
 -- | The most a row of blocks can use: the sum of what each can.
 addLimits :: [Request] -> Maybe Int
-addLimits rs = sum <$> traverse usable rs
+addLimits rs = sum <$> traverse usableWidth rs
 
 -- | The most a column of blocks can use: what the widest can.
 maxLimit :: [Request] -> Maybe Int
-maxLimit rs = maximum . (0 :) <$> traverse usable rs
+maxLimit rs = maximum . (0 :) <$> traverse usableWidth rs
 
 -- | The most a block can use, at most its natural width if it does not
 -- grow.
-usable :: Request -> Maybe Int
-usable r
+usableWidth :: Request -> Maybe Int
+usableWidth r
   | reqGrow r > 0 = max (reqMax r) <$> reqLimit r
   | otherwise = Just (reqMax r)
 
