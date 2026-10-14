@@ -45,7 +45,7 @@ library
         Lipstick.Outline
         Lipstick.Terminal
         Lipstick.Width
-        Lipstick.Internal.Block
+        Lipstick.Internal.Grid
         Lipstick.Internal.Types
         Lipstick.Internal.UnicodeTable
     build-depends:

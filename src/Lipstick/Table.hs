@@ -26,7 +26,7 @@ module Lipstick.Table
 import Data.List (intercalate, transpose)
 import Data.Text qualified as T
 import Lipstick.Border
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types (Attrs (..), left)
 import Lipstick.Mod
 import Lipstick.Style (Style, render)
@@ -124,7 +124,7 @@ fitContent = fieldMod (\t -> t {tableFitContent = True})
 
 -- | A table with a header row (none if empty) and body rows. Short rows
 -- are padded with empty cells.
-table :: Mod Table -> [Inline] -> [[Inline]] -> Block
+table :: Mod Table -> [Inline] -> [[Inline]] -> Grid
 table m headers rows = fst (layoutTable m headers rows)
 
 -- | The first and last body rows a table shows (the last is one less than
@@ -133,9 +133,9 @@ table m headers rows = fst (layoutTable m headers rows)
 visibleRows :: Mod Table -> [Inline] -> [[Inline]] -> (Int, Int)
 visibleRows m headers rows = snd (layoutTable m headers rows)
 
-layoutTable :: Mod Table -> [Inline] -> [[Inline]] -> (Block, (Int, Int))
+layoutTable :: Mod Table -> [Inline] -> [[Inline]] -> (Grid, (Int, Int))
 layoutTable m headers rows
-  | ncols == 0 = (emptyBlock, (0, -1))
+  | ncols == 0 = (emptyGrid, (0, -1))
   | otherwise = (withProps props (maybe allLines (`take` allLines) hgt), (firstV, lastV))
   where
     (t, props) = runMod m defTable
@@ -161,7 +161,7 @@ layoutTable m headers rows
     natural =
       map
         (maximum . (0 :))
-        (transpose [[blockWidth (render (styleAt pos) c) | (pos, c) <- zip (cellPositions mk) r] | (mk, r) <- allRows])
+        (transpose [[gridWidth (render (styleAt pos) c) | (pos, c) <- zip (cellPositions mk) r] | (mk, r) <- allRows])
     sideW f e = if f edges then max 1 (textWidth e) else 0
     ruleW = if tableColumnRules t then max 1 (textWidth (leftEdge chars)) else 0
     frameW = sideW edgeLeft (leftEdge chars) + sideW edgeRight (rightEdge chars) + ruleW * (ncols - 1)
@@ -175,10 +175,10 @@ layoutTable m headers rows
     renderRow (mk, r) =
       let poss = cellPositions mk
           first = [render (styleAt pos <> width cw) c | (pos, c, cw) <- zip3 poss r widths]
-          h = maximum (1 : map blockHeight first)
+          h = maximum (1 : map gridHeight first)
           blocks = [render (styleAt pos <> width cw <> height h) c | (pos, c, cw) <- zip3 poss r widths]
        in [ [alignCells mempty left cw (cropCells cw l) | (cw, l) <- zip widths ls]
-          | ls <- transpose (map (padTo h . blockCells) blocks)
+          | ls <- transpose (map (padTo h . gridCells) blocks)
           ]
     padTo h ls = take h (ls ++ repeat [])
 

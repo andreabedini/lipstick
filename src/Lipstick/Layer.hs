@@ -32,7 +32,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Mod (Mod, fieldMod, runMod, withProps)
 
 data Layer = Layer
@@ -42,15 +42,15 @@ data Layer = Layer
   , layerName :: !(Maybe Text)
   , layerTransparent :: !Bool
   , layerChildren :: [Layer]
-  , layerBlock :: Block
+  , layerBlock :: Grid
   }
 
 -- | A layer showing a block, at the origin unless moved with 'offset'. The
 -- layer's text attributes are the base for the block.
-layer :: Mod Layer -> Block -> Layer
+layer :: Mod Layer -> Grid -> Layer
 layer m b =
   let (l, props) = runMod m (Layer 0 0 0 Nothing False [] b)
-   in l {layerBlock = withProps props (blockCells (layerBlock l))}
+   in l {layerBlock = withProps props (gridCells (layerBlock l))}
 
 -- | Move the layer right and down (relative to its parent, for sublayers).
 -- Parts moved off the top or left of the canvas are cut off.
@@ -87,13 +87,13 @@ flatten = sortOn layerZ . concatMap (go 0 0 0)
 data Slot = Start !Cell | Continued
 
 -- | Draw layers onto a canvas just big enough for all of them.
-compose :: [Layer] -> Block
+compose :: [Layer] -> Grid
 compose layers =
   fromCellLines [row r | r <- [0 .. h - 1]]
   where
     flat = flatten layers
-    w = maximum (0 : [layerX l + blockWidth (layerBlock l) | l <- flat])
-    h = maximum (0 : [layerY l + blockHeight (layerBlock l) | l <- flat])
+    w = maximum (0 : [layerX l + gridWidth (layerBlock l) | l <- flat])
+    h = maximum (0 : [layerY l + gridHeight (layerBlock l) | l <- flat])
 
     canvas = foldl paintLayer Map.empty flat
 
@@ -107,11 +107,11 @@ compose layers =
     blank = Cell mempty (T.singleton ' ') 1
 
 -- | Draw one block on top of another, at a column and row.
-overlay :: Int -> Int -> Block -> Block -> Block
+overlay :: Int -> Int -> Grid -> Grid -> Grid
 overlay x y top base = compose [layer mempty base, layer (offset x y) top]
 
 paintLayer :: Map (Int, Int) Slot -> Layer -> Map (Int, Int) Slot
-paintLayer canvas l = foldl paintRow canvas (zip [layerY l ..] (blockCells (layerBlock l)))
+paintLayer canvas l = foldl paintRow canvas (zip [layerY l ..] (gridCells (layerBlock l)))
   where
     paintRow m (r, cells)
       | r < 0 = m
@@ -175,7 +175,7 @@ data Rect = Rect
   deriving (Eq, Show)
 
 bounds :: Layer -> Rect
-bounds l = Rect (layerX l) (layerY l) (blockWidth (layerBlock l)) (blockHeight (layerBlock l))
+bounds l = Rect (layerX l) (layerY l) (gridWidth (layerBlock l)) (gridHeight (layerBlock l))
 
 contains :: Int -> Int -> Rect -> Bool
 contains x y (Rect rx ry w h) = x >= rx && x < rx + w && y >= ry && y < ry + h

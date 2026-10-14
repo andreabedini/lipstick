@@ -47,7 +47,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Color (Color, blend)
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 import Lipstick.Mod
 import Lipstick.Width (textWidth)
@@ -139,7 +139,7 @@ inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
 -- | Render text in a box. When a 'width' is set, the text is word-wrapped
 -- to fit inside the padding and border, or with 'noWrap' cut short with an
 -- ellipsis.
-render :: Mod Style -> Inline -> Block
+render :: Mod Style -> Inline -> Grid
 render m inl =
   let (s, p) = resolveStyle m
       ls = inlineLines (styleTabWidth s) (maybe inl (`transformInline` inl) (styleTransform s))
@@ -155,8 +155,8 @@ render m inl =
 
 -- | Put an existing block in a box. The block is not re-wrapped: if it is
 -- wider than the 'width' allows, the box grows.
-frame :: Mod Style -> Block -> Block
-frame m b = let (s, p) = resolveStyle m in layout s p (blockCells b)
+frame :: Mod Style -> Grid -> Grid
+frame m b = let (s, p) = resolveStyle m in layout s p (gridCells b)
 
 transformInline :: (Text -> Text) -> Inline -> Inline
 transformInline f (Inline segs) = Inline [(a, f t) | (a, t) <- segs]
@@ -175,7 +175,7 @@ contentWidth s = do
       (bl, br) = borderColumns (styleBorder s)
   pure (max 0 (w - pl - pr - bl - br))
 
-layout :: Style -> Props -> [[Cell]] -> Block
+layout :: Style -> Props -> [[Cell]] -> Grid
 layout s props content0 =
   let attrs = propAttrs props
       fill

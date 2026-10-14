@@ -25,19 +25,19 @@ import Data.Maybe (fromMaybe)
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick.Ansi
 import Lipstick.Color (ColorProfile (..))
-import Lipstick.Internal.Block (Block)
+import Lipstick.Internal.Grid (Grid)
 import System.Console.ANSI (ConsoleLayer (Background), hGetLayerColor, hNowSupportsANSI)
 import System.Environment (getEnvironment)
 import System.IO (Handle, hIsTerminalDevice, stdin, stdout)
 import System.Info (os)
 
 -- | Print a block to standard output, followed by a newline.
-putBlock :: Block -> IO ()
+putBlock :: Grid -> IO ()
 putBlock = hPutBlock stdout
 
 -- | Print a block to a handle, followed by a newline, downsampling colours
 -- to what the handle supports.
-hPutBlock :: Handle -> Block -> IO ()
+hPutBlock :: Handle -> Grid -> IO ()
 hPutBlock h b = do
   env <- detectEnv h
   hPutBlockWith env h b
@@ -48,7 +48,7 @@ hPutBlock h b = do
 -- The output is always UTF-8, whatever the handle's encoding: terminals
 -- expect it, and a locale such as @C@ (common in containers and cron jobs)
 -- would otherwise make the handle reject box-drawing characters.
-hPutBlockWith :: RenderEnv -> Handle -> Block -> IO ()
+hPutBlockWith :: RenderEnv -> Handle -> Grid -> IO ()
 hPutBlockWith env h b = Utf8.hPutStrLn h (toAnsi env b)
 
 -- | The colour profile of a handle, and whether the background is dark

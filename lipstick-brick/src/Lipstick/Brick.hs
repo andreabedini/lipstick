@@ -20,19 +20,19 @@ import Brick.Types (Widget)
 import Brick.Widgets.Core (raw)
 import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
-import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), resolveColor)
-import Lipstick.Internal.Block (Block (..), Line (..), Span (..))
+import Lipstick (ColorProfile (..), RenderEnv (..), TermColor (..), resolveColor)
+import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
 import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
 -- | A fixed-size widget showing a block.
-blockWidget :: RenderEnv -> Block -> Widget n
+blockWidget :: RenderEnv -> Grid -> Widget n
 blockWidget env = raw . blockImage env
 
 -- | A vty image of a block, exactly as wide and tall as the block. vty has
 -- no images zero columns wide, so a block of width 0 gives 'V.emptyImage'
 -- whatever its height.
-blockImage :: RenderEnv -> Block -> V.Image
-blockImage env b = V.vertCat (map line (blockLines b))
+blockImage :: RenderEnv -> Grid -> V.Image
+blockImage env b = V.vertCat (map line (gridLines b))
   where
     line (Line _ spans) = V.horizCat [V.text' (attr env a) t | Span a t _ <- spans]
 

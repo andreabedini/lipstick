@@ -21,7 +21,7 @@ import Data.Text.Lazy qualified as TL
 import Data.Text.Lazy.Builder (Builder)
 import Data.Text.Lazy.Builder qualified as B
 import Lipstick.Color
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 
 -- | What the output can display.
@@ -37,12 +37,12 @@ defaultRenderEnv = RenderEnv TrueColor True
 
 -- | The block's lines, separated by newlines, without a trailing newline.
 -- Attributes are reset at the end of every line.
-toAnsi :: RenderEnv -> Block -> Text
+toAnsi :: RenderEnv -> Grid -> Text
 toAnsi env b =
-  TL.toStrict (B.toLazyText (mconcat (intersperse (B.singleton '\n') (map (renderLine env) (blockLines b)))))
+  TL.toStrict (B.toLazyText (mconcat (intersperse (B.singleton '\n') (map (renderLine env) (gridLines b)))))
 
 -- | The block as plain text, without any escape sequences.
-renderPlain :: Block -> Text
+renderPlain :: Grid -> Text
 renderPlain = toAnsi (RenderEnv NoTTY True)
 
 -- | Fully resolved graphic rendition.
@@ -271,8 +271,8 @@ applySGR groups a = case groups of
 -- | The display width of text that may contain escape sequences: the width
 -- of its widest line.
 ansiWidth :: Text -> Int
-ansiWidth = blockWidth . fromCellLines . inlineLines 4 . fromAnsi
+ansiWidth = gridWidth . fromCellLines . inlineLines 4 . fromAnsi
 
 -- | The number of lines of text that may contain escape sequences.
 ansiHeight :: Text -> Int
-ansiHeight = blockHeight . fromCellLines . inlineLines 4 . fromAnsi
+ansiHeight = gridHeight . fromCellLines . inlineLines 4 . fromAnsi

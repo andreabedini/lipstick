@@ -26,9 +26,20 @@ module Lipstick.Block
 import Data.List (transpose)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 import Lipstick.Mod (Mod, Props (..), propsOf, runMod)
+
+-- | A rectangle of styled text.
+type Block = Grid
+
+blockWidth, blockHeight :: Block -> Int
+blockWidth = gridWidth
+blockHeight = gridHeight
+
+-- | The block with no lines.
+emptyBlock :: Block
+emptyBlock = emptyGrid
 
 -- | Unstyled text; lines are split on newlines.
 text :: Text -> Block
@@ -49,19 +60,19 @@ styled m t = Inline [(propAttrs (snd (runMod m mempty)), t)]
 -- vertically ('top', 'center', 'bottom').
 joinHorizontal :: Position -> [Block] -> Block
 joinHorizontal p bs =
-  Block (sum (map blockWidth bs)) h (map (cellsLine . concat) (transpose (map columnOf bs)))
+  Grid (sum (map blockWidth bs)) h (map (cellsLine . concat) (transpose (map columnOf bs)))
   where
     h = maximum (0 : map blockHeight bs)
     columnOf b =
       let (before, after) = splitExtra p (h - blockHeight b)
           blank = blankCells mempty (blockWidth b)
-       in replicate before blank ++ blockCells b ++ replicate after blank
+       in replicate before blank ++ gridCells b ++ replicate after blank
 
 -- | Stack blocks. The position aligns narrower blocks horizontally
 -- ('left', 'center', 'right').
 joinVertical :: Position -> [Block] -> Block
 joinVertical p bs =
-  Block w (sum (map blockHeight bs)) [cellsLine (alignCells mempty p w l) | b <- bs, l <- blockCells b]
+  Grid w (sum (map blockHeight bs)) [cellsLine (alignCells mempty p w l) | b <- bs, l <- gridCells b]
   where
     w = maximum (0 : map blockWidth bs)
 

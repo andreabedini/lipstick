@@ -1,16 +1,16 @@
 -- | The representation of rendered output. Not part of the stable API.
 --
--- A 'Block' is a rectangle: every line is exactly 'blockWidth' columns
--- wide and there are exactly 'blockHeight' lines. Layout code works on
+-- A 'Grid' is a rectangle: every line is exactly 'gridWidth' columns
+-- wide and there are exactly 'gridHeight' lines. Layout code works on
 -- lines of 'Cell's (one cluster each) and packs them back into 'Span's.
-module Lipstick.Internal.Block
-  ( -- * Blocks
-    Block (..)
+module Lipstick.Internal.Grid
+  ( -- * Grids
+    Grid (..)
   , Line (..)
   , Span (..)
-  , emptyBlock
+  , emptyGrid
   , fromCellLines
-  , blockCells
+  , gridCells
 
     -- * Cells
   , Cell (..)
@@ -41,10 +41,10 @@ import Data.Text qualified as T
 import Lipstick.Internal.Types
 import Lipstick.Width (clusters)
 
-data Block = Block
-  { blockWidth :: !Int
-  , blockHeight :: !Int
-  , blockLines :: ![Line]
+data Grid = Grid
+  { gridWidth :: !Int
+  , gridHeight :: !Int
+  , gridLines :: ![Line]
   }
   deriving (Eq, Show)
 
@@ -72,21 +72,21 @@ data Cell = Cell
   deriving (Eq, Show)
 
 -- | Unstyled text; lines are split on newlines.
-instance IsString Block where
+instance IsString Grid where
   fromString = fromCellLines . inlineLines 4 . plain . T.pack
 
 -- | The block with no lines.
-emptyBlock :: Block
-emptyBlock = Block 0 0 []
+emptyGrid :: Grid
+emptyGrid = Grid 0 0 []
 
 -- | Build a block, padding lines on the right to the widest one.
-fromCellLines :: [[Cell]] -> Block
+fromCellLines :: [[Cell]] -> Grid
 fromCellLines ls =
   let w = maximum (0 : map cellsWidth ls)
-   in Block w (length ls) [cellsLine (alignCells mempty left w l) | l <- ls]
+   in Grid w (length ls) [cellsLine (alignCells mempty left w l) | l <- ls]
 
-blockCells :: Block -> [[Cell]]
-blockCells = map lineCells . blockLines
+gridCells :: Grid -> [[Cell]]
+gridCells = map lineCells . gridLines
 
 cellsWidth :: [Cell] -> Int
 cellsWidth = sum . map cellWidth

@@ -8,7 +8,7 @@ module Lipstick.Place
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 import Lipstick.Mod
 
@@ -40,14 +40,14 @@ whitespaceChars t = fieldMod (\p -> p {placeChars = t})
 -- left as it is in that direction.
 --
 -- > place (width 80 <> height 5 <> align center <> valign center) b
-place :: Mod Place -> Block -> Block
+place :: Mod Place -> Grid -> Grid
 place m b =
   let (Place (Size w h) (Align ah av) chars, props) = runMod m defPlace
-      outerW = max (blockWidth b) (fromMaybe 0 w)
-      outerH = max (blockHeight b) (fromMaybe 0 h)
+      outerW = max (gridWidth b) (fromMaybe 0 w)
+      outerH = max (gridHeight b) (fromMaybe 0 h)
       ws n = fillCells mempty chars n
-      (left', right') = splitExtra ah (outerW - blockWidth b)
-      (above, below) = splitExtra av (outerH - blockHeight b)
-      body = [ws left' ++ l ++ ws right' | l <- blockCells b]
+      (left', right') = splitExtra ah (outerW - gridWidth b)
+      (above, below) = splitExtra av (outerH - gridHeight b)
+      body = [ws left' ++ l ++ ws right' | l <- gridCells b]
       ls = replicate above (ws outerW) ++ body ++ replicate below (ws outerW)
    in withProps props ls

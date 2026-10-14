@@ -139,7 +139,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Lipstick.Border (Border, normalBorder)
 import Lipstick.Color (Color)
-import Lipstick.Internal.Block
+import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 
 -- | A modification of a thing @f@: of its own fields, and of the
@@ -187,11 +187,11 @@ propsOf (Mod _ g) = g defProps
 
 -- | What most builders do with the properties: lay the attributes under
 -- everything, then crop.
-withProps :: Props -> [[Cell]] -> Block
+withProps :: Props -> [[Cell]] -> Grid
 withProps p = cropToProps p . overCellAttrs (propAttrs p <>)
 
 -- | Crop lines to 'maxWidth' and 'maxHeight'.
-cropToProps :: Props -> [[Cell]] -> Block
+cropToProps :: Props -> [[Cell]] -> Grid
 cropToProps p ls =
   let croppedW = maybe ls (\n -> map (cropCells n) ls) (propMaxWidth p)
    in fromCellLines (maybe croppedW (`take` croppedW) (propMaxHeight p))
