@@ -139,14 +139,17 @@ sgrCode s = "\ESC[" <> mconcat (intersperse ";" (map B.fromString ("0" : params)
 -- another program, into styled text.
 --
 -- SGR sequences (colours, attributes, underline styles and colours) and
--- OSC 8 hyperlinks are kept; every other escape sequence is dropped.
+-- OSC 8 hyperlinks are kept; every other escape sequence is dropped, along
+-- with the payload of control strings (DCS, SOS, PM, APC: sixel and kitty
+-- graphics, tmux passthrough).
 -- Sequences that switch an attribute off (such as @22@ or @39@) unset it,
 -- so the attributes of an enclosing style show through, and a reset
 -- reveals the enclosing style completely.
 fromAnsi :: Text -> Inline
 fromAnsi = Inline . go mempty
   where
-    isEscape c = c == '\ESC' || c == '\x9B' || c == '\x9D'
+    -- ESC, and the 8-bit forms of CSI, OSC and the control strings.
+    isEscape c = c == '\ESC' || c `elem` ['\x9B', '\x9D', '\x90', '\x98', '\x9E', '\x9F']
 
     go a t =
       let (txt, rest) = T.break isEscape t
@@ -154,14 +157,17 @@ fromAnsi = Inline . go mempty
             Nothing -> []
             Just ('\x9B', r) -> csi a r
             Just ('\x9D', r) -> osc a r
-            Just (_, r) -> case T.uncons r of
+            Just ('\ESC', r) -> case T.uncons r of
               Just ('[', r') -> csi a r'
               Just (']', r') -> osc a r'
               Just (c, r')
+                -- DCS, SOS, PM, APC
+                | c `elem` ['P', 'X', '^', '_'] -> go a (afterString (T.dropWhile (not . endsString) r'))
                 -- ESC, intermediates, final (e.g. ESC ( B)
                 | c >= ' ' && c <= '/' -> go a (T.drop 1 (T.dropWhile (\x -> x >= ' ' && x <= '/') r'))
                 | otherwise -> go a r'
               Nothing -> []
+            Just (_, r) -> go a (afterString (T.dropWhile (not . endsString) r))
 
     -- CSI: parameters, intermediates, final byte.
     csi a r =
@@ -174,12 +180,16 @@ fromAnsi = Inline . go mempty
 
     -- OSC: up to BEL or ST.
     osc a r =
-      let (body, r1) = T.break (\c -> c == '\a' || c == '\ESC' || c == '\x9C') r
-          r2 = case T.uncons r1 of
-            Just ('\ESC', x) -> T.drop 1 x
-            Just (_, x) -> x
-            Nothing -> T.empty
-       in go (applyOSC body a) r2
+      let (body, r1) = T.break endsString r
+       in go (applyOSC body a) (afterString r1)
+
+    -- A control string ends with ST (ESC \ or 0x9C) or BEL, or is cut
+    -- short by the ESC of another sequence.
+    endsString c = c == '\a' || c == '\ESC' || c == '\x9C'
+    afterString r = case T.uncons r of
+      Just ('\ESC', x) -> fromMaybe r (T.stripPrefix (T.singleton '\\') x)
+      Just (_, x) -> x
+      Nothing -> T.empty
 
     applyOSC body a = case T.splitOn ";" body of
       "8" : _params : uri -> a {attrLink = if T.null (T.intercalate ";" uri) then Nothing else Just (T.intercalate ";" uri)}

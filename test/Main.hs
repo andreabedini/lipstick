@@ -180,6 +180,12 @@ fromAnsiTests =
     , testCase "other sequences are dropped" $
         parsed "\ESC[2K\ESC(Bab\ESC]0;title\acd\ESC7" @?= "abcd"
     , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
+    , testCase "control string payloads are dropped" $
+        parsed "a\ESC_Gf=100;AAAA\ESC\\b\ESCPtmux;payload\ESC\\c\ESCXsos\ESC\\d\ESC^pm\ae" @?= "abcde"
+    , testCase "8-bit control strings are dropped" $
+        parsed "a\x90q#0;2\x9C\&b\x9F\&apc\x9C\&c\x98sos\ESC\\d" @?= "abcd"
+    , testCase "an escape cuts a control string short" $
+        parsed "\ESC]0;title\ESC[1mA\ESCPdcs\ESC[3mB" @?= "\ESC[0;1mA\ESC[0;1;3mB\ESC[0m"
     , testCase "hyperlink with a C1 control is escaped on output" $
         parsed "\ESC]8;;http://a\x9B\&2J\ESC\\x" @?= "\ESC]8;;http://a%C2%9B2J\ESC\\x\ESC]8;;\ESC\\"
     , testCase "keeps the outer style" $
