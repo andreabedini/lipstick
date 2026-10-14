@@ -71,6 +71,15 @@ widthTests =
     , testCase "ambiguous width is narrow" $ textWidth "±" @?= 1
     , testCase "CJK extension B" $ textWidth "\x20000" @?= 2
     , testCase "unicode version" $ unicodeVersion @?= "16.0.0"
+    , testCase "a cluster split across pieces is measured whole" $ do
+        blockWidth (fromInline ("\x2764" <> "\xFE0F" <> "x")) @?= 3
+        blockWidth (fromInline (styled bold "👨" <> "\x200D👩")) @?= 2
+    , testCase "a cluster split across pieces takes the first piece's style" $
+        toAnsi defaultRenderEnv (fromInline (styled bold "\x2764" <> "\xFE0F"))
+          @?= "\ESC[0;1m\x2764\xFE0F\ESC[0m"
+    , testCase "styleIndices counts a split cluster once" $
+        toAnsi defaultRenderEnv (fromInline (styleIndices [1] bold mempty ("\x2764" <> "\xFE0F" <> "x")))
+          @?= "\x2764\xFE0F\ESC[0;1mx\ESC[0m"
     ]
 
 -- | Test cases from the Unicode conformance file: the text and its
@@ -176,6 +185,8 @@ fromAnsiTests =
     , testCase "keeps the outer style" $
         toAnsi defaultRenderEnv (render (bg "4") (fromAnsi "\ESC[1ma\ESC[0mb"))
           @?= "\ESC[0;1;44ma\ESC[0;44mb\ESC[0m"
+    , testCase "escapes inside a cluster do not split it" $
+        ansiWidth "\ESC[31m👩\ESC[0m\x200D💻" @?= 2
     , testCase "width ignores escapes" $
         blockWidth (render (border normalBorder) (fromAnsi "\ESC[31mred\ESC[0m")) @?= 5
     , testProperty "toAnsi . fromAnsi . toAnsi = toAnsi" $ \spec (StyledText inl) ->
@@ -804,6 +815,26 @@ rectangular b =
           , conjoin [textWidth l === blockWidth b | l <- ls]
           ]
 
+-- | Text made of pieces that combine into clusters: emoji with variation
+-- selectors and ZWJs, flags, combining marks, Hangul jamo.
+trickyText :: Gen Text
+trickyText =
+  T.concat
+    <$> listOf
+      ( elements
+          [ "a", " ", "e", "\x301", "\x2764", "\xFE0F", "\xFE0E", "\x200D", "👨", "👩"
+          , "🇮", "🇹", "日", "\x1100", "\x1161", "#", "\x20E3"
+          ]
+      )
+
+-- | A text cut into pieces at random characters, each with random styles.
+styledPieces :: Text -> Gen Inline
+styledPieces t = do
+  cuts <- sublistOf [1 .. T.length t - 1]
+  let bounds = zip (0 : cuts) (cuts ++ [T.length t])
+      pieces = [T.take (e - s) (T.drop s t) | (s, e) <- bounds]
+  mconcat <$> mapM (\p -> elements [plain p, styled bold p, styled (fg red) p]) pieces
+
 stripAnsi :: Text -> Text
 stripAnsi t = case T.breakOn "\ESC" t of
   (before, rest)
@@ -838,6 +869,10 @@ properties =
     , testProperty "stripping ANSI gives the plain text" $ \spec (Words t) ->
         let b = render (specMod spec <> bold <> fg "#123456" <> bg "200" <> link "u") (plain t)
          in stripAnsi (toAnsi defaultRenderEnv b) === renderPlain b
+    , testProperty "styling pieces of a text does not change its width" $
+        forAll trickyText $ \t -> forAll (styledPieces t) $ \inl ->
+          blockWidth (fromInline inl) === textWidth t
+            .&&. rectangular (render (border roundedBorder <> padding 0 1) inl)
     , testProperty "maxWidth bounds the width" $ \spec (Words t) (Positive n) ->
         let b = render (specMod spec <> maxWidth n) (plain t)
          in rectangular b .&&. blockWidth b <= n

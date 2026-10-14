@@ -30,6 +30,7 @@ module Lipstick.Internal.Block
   , Inline (..)
   , plain
   , inlineLines
+  , styledClusters
   ) where
 
 import Data.Function (on)
@@ -221,18 +222,31 @@ plain t = Inline [(mempty, t)]
 -- other control characters, including escape sequences' ESC, are dropped.
 -- Use 'Lipstick.Ansi.fromAnsi' for text that contains escape sequences.
 inlineLines :: Int -> Inline -> [[Cell]]
-inlineLines tabWidth (Inline segs) = splitLines (concatMap segment segs)
+inlineLines tabWidth (Inline segs) = splitLines (styledClusters [(a, sanitise t) | (a, t) <- segs])
   where
-    segment (a, t) =
-      concat
-        [ [Right (Cell a c w) | (c, w) <- clusters (sanitise part)] ++ [Left () | not lastPart]
-        | (part, lastPart) <- markLast (T.splitOn (T.singleton '\n') t)
-        ]
-    sanitise = T.filter isPrintable . T.replace (T.singleton '\t') (T.replicate tabWidth (T.singleton ' '))
+    sanitise = T.filter isKept . T.replace (T.singleton '\t') (T.replicate tabWidth (T.singleton ' '))
     -- Drop C0 and C1 controls (and DEL): they could start escape sequences.
-    isPrintable c = c >= ' ' && (c < '\DEL' || c > '\x9F')
-    markLast xs = zip xs (map (const False) (drop 1 xs) ++ [True])
+    isKept c = c == '\n' || (c >= ' ' && (c < '\DEL' || c > '\x9F'))
+    isNewline (_, c, _) = c == T.singleton '\n'
+    cells cs = [Cell a c w | (a, c, w) <- cs]
+    splitLines xs = case break isNewline xs of
+      (cs, []) -> [cells cs]
+      (cs, _ : rest) -> cells cs : splitLines rest
 
-    splitLines xs = case break (either (const True) (const False)) xs of
-      (cs, []) -> [[c | Right c <- cs]]
-      (cs, _ : rest) -> [c | Right c <- cs] : splitLines rest
+-- | The grapheme clusters of styled pieces of text, each with its width
+-- and the attributes of the piece its first character is in. Clusters are
+-- found in the text as a whole, as the terminal sees it, so one can span
+-- pieces: an emoji and its variation selector, say, styled separately.
+styledClusters :: [(Attrs, Text)] -> [(Attrs, Text, Int)]
+styledClusters segs =
+  go [(a, T.length t) | (a, t) <- segs, not (T.null t)] (clusters (T.concat (map snd segs)))
+  where
+    -- The pieces still to cover, with how many characters are left of the
+    -- first.
+    go pieces@((a, _) : _) ((c, w) : cs) = (a, c, w) : go (consume (T.length c) pieces) cs
+    go _ _ = []
+    consume k pieces = case pieces of
+      (a, n) : rest
+        | k < n -> (a, n - k) : rest
+        | otherwise -> consume (k - n) rest
+      [] -> []

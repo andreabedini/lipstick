@@ -29,7 +29,6 @@ import Data.Text qualified as T
 import Lipstick.Internal.Block
 import Lipstick.Internal.Types
 import Lipstick.Mod (Mod, Props (..), propsOf, runMod)
-import Lipstick.Width (clusters)
 
 -- | Unstyled text; lines are split on newlines.
 text :: Text -> Block
@@ -102,7 +101,7 @@ styleIndices indices matched unmatched = restyle $ \_ i ->
 -- | Layer extra attributes over each cluster, given its starting column and
 -- its index.
 restyle :: (Int -> Int -> Attrs) -> Inline -> Inline
-restyle extra (Inline segs) = Inline (merge (go 0 0 [(a, c, cw) | (a, t) <- segs, (c, cw) <- clusters t]))
+restyle extra (Inline segs) = Inline (merge (go 0 0 (styledClusters segs)))
   where
     go _ _ [] = []
     go col i ((a, c, cw) : rest)
