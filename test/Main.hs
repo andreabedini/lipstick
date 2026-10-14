@@ -93,6 +93,11 @@ widthTests =
     , testCase "a cluster split across pieces takes the first piece's style" $
         toAnsi defaultRenderEnv (fromInline (styled bold "\x2764" <> "\xFE0F"))
           @?= "\ESC[0;1m\x2764\xFE0F\ESC[0m"
+    , testCase "bidi embeddings, overrides and isolates are dropped" $
+        renderPlain (render (border normalBorder) "a\x202E\&b\x2067\&c\x2069\&d\x202C")
+          @?= "┌────┐\n│abcd│\n└────┘"
+    , testCase "bidi marks are kept" $
+        renderPlain (text "a\x200F\&b\x200E\&c\x061C\&d") @?= "a\x200F\&b\x200E\&c\x061C\&d"
     , testCase "styleRanges counts a tab as four columns" $
         toAnsi defaultRenderEnv (fromInline (styleRanges [(4, 5, bold)] "\tab"))
           @?= "    \ESC[0;1ma\ESC[0mb"

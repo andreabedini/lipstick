@@ -277,14 +277,21 @@ plain :: Text -> Inline
 plain t = Inline [(mempty, t)]
 
 -- | Split inline text into lines of cells. Tabs become @tabWidth@ spaces;
--- other control characters, including escape sequences' ESC, are dropped.
+-- other control characters, including escape sequences' ESC, and bidi
+-- embeddings, overrides and isolates are dropped.
 -- Use 'Lipstick.Ansi.fromAnsi' for text that contains escape sequences.
 inlineLines :: Int -> Inline -> [[Cell]]
 inlineLines tabWidth (Inline segs) = splitLines (styledClusters [(a, sanitise t) | (a, t) <- segs])
   where
     sanitise = T.filter isKept . T.replace (T.singleton '\t') (T.replicate tabWidth (T.singleton ' '))
-    -- Drop C0 and C1 controls (and DEL): they could start escape sequences.
-    isKept c = c == '\n' || (c >= ' ' && (c < '\DEL' || c > '\x9F'))
+    -- Drop C0 and C1 controls (and DEL): they could start escape
+    -- sequences. Drop the bidi embeddings, overrides and isolates too: they
+    -- last to the end of the line, so in a terminal that reorders text one
+    -- left open would reverse what follows it, borders and blocks beside
+    -- included. The marks (LRM, RLM, ALM) affect only their neighbours and
+    -- stay.
+    isKept c = c == '\n' || (c >= ' ' && (c < '\DEL' || c > '\x9F') && not (isBidiControl c))
+    isBidiControl c = (c >= '\x202A' && c <= '\x202E') || (c >= '\x2066' && c <= '\x2069')
     isNewline (_, c, _) = c == T.singleton '\n'
     cells cs = [Cell a c w False | (a, c, w) <- cs]
     splitLines xs = case break isNewline xs of
