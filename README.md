@@ -235,6 +235,8 @@ output supports. Detection follows the usual conventions: no escape
 sequences when the output is not a terminal (unless `CLICOLOR_FORCE` is
 set), no colours with `NO_COLOR`, and the colour depth from `COLORTERM` and
 `TERM`. On Windows the console's ANSI processing is switched on as needed.
+Blocks are laid out in the terminal's width, or in `COLUMNS` if it is set;
+output that is not going to a terminal keeps its natural width.
 
 The background is taken from `COLORFGBG` when the terminal sets it and is
 assumed dark otherwise. To ask the terminal, which takes a round trip and
@@ -252,7 +254,8 @@ gives it without any escape sequences.
 ## brick and vty
 
 The `lipstick-brick` package in this repository shows blocks in brick and
-vty applications: `blockWidget` and `blockImage`.
+vty applications: `blockWidget` and `blockImage`. A `blockWidget` is laid
+out in the width brick gives it, and takes all of it when the block grows.
 
 ## How lipstick differs from lipgloss
 

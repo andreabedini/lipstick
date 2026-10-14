@@ -55,6 +55,7 @@ library
         bytestring >=0.11 && <0.13,
         text >=2.1.2 && <2.2,
         ansi-terminal ^>=1.1,
+        terminal-size >=0.3.4 && <0.4,
         colour ^>=2.3,
         containers >=0.6 && <0.8
     default-language: GHC2024

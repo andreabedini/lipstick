@@ -1,6 +1,8 @@
 -- | Detecting what the terminal supports, and printing blocks.
 --
--- Printing detects the colour profile on every call, which is cheap. The
+-- Printing detects the colour profile and the width on every call, which
+-- is cheap: blocks are laid out in the terminal's width (or @COLUMNS@, if
+-- set), and at their natural width when the output is not a terminal. The
 -- background is taken from @COLORFGBG@ when the terminal sets it, and is
 -- otherwise assumed dark. To ask the terminal itself, which is slower and
 -- reads from stdin, detect the environment once with 'detectEnvQuery' and
@@ -12,6 +14,8 @@ module Lipstick.Terminal
   , detectEnv
   , detectEnvQuery
   , detectProfile
+  , detectWidth
+  , widthFromEnv
   , profileFromEnv
   , backgroundFromEnv
   , queryDarkBackground
@@ -27,6 +31,7 @@ import Lipstick.Ansi
 import Lipstick.Color (ColorProfile (..))
 import Lipstick.Internal.Layout (Block)
 import System.Console.ANSI (ConsoleLayer (Background), hGetLayerColor, hNowSupportsANSI)
+import System.Console.Terminal.Size (Window (..), hSize)
 import System.Environment (getEnvironment)
 import System.IO (Handle, hIsTerminalDevice, stdin, stdout)
 import System.Info (os)
@@ -54,14 +59,39 @@ hPutBlockWith env h b = case toAnsiLines env b of
   [] -> Utf8.hPutStrLn h mempty
   ls -> mapM_ (Utf8.hPutStrLn h) ls
 
--- | The colour profile of a handle, and whether the background is dark
--- according to @COLORFGBG@ (dark if it is not set). Does not talk to the
--- terminal.
+-- | The colour profile and width of a handle, and whether the background
+-- is dark according to @COLORFGBG@ (dark if it is not set). Does not talk
+-- to the terminal.
 detectEnv :: Handle -> IO RenderEnv
 detectEnv h = do
   profile <- detectProfile h
   vars <- getEnvironment
-  pure (RenderEnv profile (fromMaybe True (backgroundFromEnv vars)) Nothing)
+  w <- detectWidth h
+  pure (RenderEnv profile (fromMaybe True (backgroundFromEnv vars)) w)
+
+-- | The width to lay blocks out in for a handle: @COLUMNS@ if it is set to
+-- a positive number, otherwise the width of the terminal behind the handle
+-- (asked of the operating system, without escape sequences), and
+-- 'Nothing' when the handle is not a terminal.
+detectWidth :: Handle -> IO (Maybe Int)
+detectWidth h = do
+  vars <- getEnvironment
+  case widthFromEnv vars of
+    Just w -> pure (Just w)
+    Nothing -> do
+      size <- try (hSize h)
+      pure $ case size of
+        Right (Just win) | width win > 0 -> Just (width win)
+        Right _ -> Nothing
+        Left (_ :: SomeException) -> Nothing
+
+-- | The width set by @COLUMNS@, if it is a positive number.
+widthFromEnv :: [(String, String)] -> Maybe Int
+widthFromEnv vars = do
+  v <- lookup "COLUMNS" vars
+  if not (null v) && all isDigit v && length v <= 6 && read v > (0 :: Int)
+    then Just (read v)
+    else Nothing
 
 -- | Like 'detectEnv', but first asks the terminal for its background
 -- colour (see 'queryDarkBackground'). Call it once and keep the result.

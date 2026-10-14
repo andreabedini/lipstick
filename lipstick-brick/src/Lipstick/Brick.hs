@@ -3,8 +3,9 @@
 -- > ui :: Widget ()
 -- > ui = blockWidget defaultRenderEnv (render (border roundedBorder <> padding 1 2) "Hello")
 --
--- Colours are resolved for the 'RenderEnv' (light or dark background,
--- profile) and handed to vty, which downsamples them further if its output
+-- Widgets lay their block out in the width brick gives them, and take all
+-- of it ('Greedy') when the block grows. Colours are resolved for the
+-- 'RenderEnv' (light or dark background, profile) and handed to vty, which downsamples them further if its output
 -- needs it. 'profileForColorMode' gives the profile matching a vty output.
 --
 -- vty measures text with its own width tables, which can disagree with
@@ -16,20 +17,28 @@ module Lipstick.Brick
   , profileForColorMode
   ) where
 
-import Brick.Types (Widget)
+import Brick.Types (Size (..), Widget (..), availWidthL, getContext)
 import Brick.Widgets.Core (raw)
+import Lens.Micro ((^.))
 import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import Lipstick (Block, ColorProfile (..), RenderEnv (..), TermColor (..), layout, resolveColor)
 import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
+import Lipstick.Internal.Layout (Block (..), Request (..))
 import Lipstick.Internal.Types (Attrs (..), Underline (..), escapeUri)
 
--- | A fixed-size widget showing a block, laid out in the environment's
--- width.
+-- | A widget showing a block, laid out in the width brick makes available
+-- (whatever the environment's 'envWidth'). It is 'Greedy' horizontally
+-- when the block grows (see 'Lipstick.fillWidth'), and 'Fixed' otherwise.
 blockWidget :: RenderEnv -> Block -> Widget n
-blockWidget env = raw . blockImage env
+blockWidget env b = Widget policy Fixed $ do
+  ctx <- getContext
+  render (raw (blockImage env {envWidth = Just (ctx ^. availWidthL)} b))
+  where
+    policy = if reqGrow (blockRequest b) > 0 then Greedy else Fixed
 
--- | A vty image of a block, exactly as wide and tall as the block. vty has
+-- | A vty image of a block, laid out in the environment's 'envWidth', and
+-- exactly as wide and tall as the laid-out block. vty has
 -- no images zero columns wide, so a block of width 0 gives 'V.emptyImage'
 -- whatever its height.
 blockImage :: RenderEnv -> Block -> V.Image

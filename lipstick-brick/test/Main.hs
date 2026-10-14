@@ -2,6 +2,9 @@
 
 module Main (main) where
 
+import Brick.Main (renderWidget)
+import Brick.Widgets.Core (raw)
+import Brick.Types (Size (..), Widget, hSize)
 import Graphics.Vty qualified as V
 import Lipstick
 import Lipstick.Brick
@@ -41,8 +44,21 @@ main =
           let b = render (fg (lightDark "1" "2")) "a"
           blockImage (RenderEnv TrueColor False Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 1) "a"
           blockImage (RenderEnv TrueColor True Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 2) "a"
+      , testCase "a block that grows is a greedy widget" $ do
+          hSize (blockWidget defaultRenderEnv (render fillWidth "x") :: Widget ()) @?= Greedy
+          hSize (blockWidget defaultRenderEnv (render mempty "x") :: Widget ()) @?= Fixed
+      , testCase "a widget takes the width brick gives it when it grows" $
+          map V.imageWidth (V.picLayers (shown (render (fillWidth <> bg red) "x") (12, 3))) @?= [12]
+      , testCase "a widget wraps its text to the width brick gives it" $ do
+          let b = text "the quick brown fox"
+              at env = V.picLayers (renderWidget Nothing [raw (blockImage env b) :: Widget ()] (10, 5))
+          V.picLayers (shown b (10, 5)) @?= at defaultRenderEnv {envWidth = Just 10}
+          assertBool "laid out at its natural width it would be cut, not wrapped" $
+            V.picLayers (shown b (10, 5)) /= at defaultRenderEnv
       , testCase "colour modes" $ do
           profileForColorMode V.FullColor @?= TrueColor
           profileForColorMode (V.ColorMode240 240) @?= ANSI256
           profileForColorMode V.NoColor @?= Ascii
       ]
+  where
+    shown b region = renderWidget Nothing [blockWidget defaultRenderEnv b :: Widget ()] region

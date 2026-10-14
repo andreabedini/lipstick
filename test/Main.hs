@@ -11,10 +11,11 @@ import Lipstick
 import Lipstick.Internal.Grid (Grid (..), Line (..), Span (..))
 import Lipstick.Internal.Layout (Assign (..), Block (..), Request (..), allocate, allocateWithin)
 import Lipstick.Internal.Types (escapeUri)
-import Lipstick.Terminal (backgroundFromEnv, profileFromEnv)
+import Lipstick.Terminal (backgroundFromEnv, profileFromEnv, widthFromEnv)
 import Lipstick.Width (clusters)
 import Numeric (readHex)
 import System.Directory (getTemporaryDirectory, removeFile)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.IO (hClose, hSetEncoding, mkTextEncoding, openTempFile)
 import Test.QuickCheck
 import Test.Tasty
@@ -778,6 +779,24 @@ profileTests =
     , testCase "COLORFGBG bright black is dark" $ backgroundFromEnv [("COLORFGBG", "7;8")] @?= Just True
     , testCase "COLORFGBG unparsable" $ backgroundFromEnv [("COLORFGBG", "default;default")] @?= Nothing
     , testCase "COLORFGBG unset" $ backgroundFromEnv [] @?= Nothing
+    , testCase "COLUMNS" $ do
+        widthFromEnv [("COLUMNS", "120")] @?= Just 120
+        widthFromEnv [("COLUMNS", "0")] @?= Nothing
+        widthFromEnv [("COLUMNS", "wide")] @?= Nothing
+        widthFromEnv [("COLUMNS", "")] @?= Nothing
+        widthFromEnv [] @?= Nothing
+    , testCase "a file has no width, unless COLUMNS sets one" $ do
+        saved <- lookupEnv "COLUMNS"
+        dir <- getTemporaryDirectory
+        (path, h) <- openTempFile dir "lipstick-width.txt"
+        unsetEnv "COLUMNS"
+        none <- detectWidth h
+        setEnv "COLUMNS" "33"
+        set <- detectWidth h
+        maybe (unsetEnv "COLUMNS") (setEnv "COLUMNS") saved
+        hClose h
+        removeFile path
+        (none, set) @?= (Nothing, Just 33)
     ]
 
 -- Properties ------------------------------------------------------------------

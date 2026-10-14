@@ -32,7 +32,8 @@ library
         text ^>=2.1,
         lipstick ^>=0.1,
         vty >=6.2 && <6.5,
-        brick >=2.7 && <2.11
+        brick >=2.7 && <2.11,
+        microlens >=0.4 && <0.6
     default-language: GHC2024
 
 test-suite lipstick-brick-test
@@ -44,6 +45,7 @@ test-suite lipstick-brick-test
         base,
         lipstick,
         lipstick-brick,
+        brick,
         vty,
         tasty ^>=1.5,
         tasty-hunit ^>=0.10

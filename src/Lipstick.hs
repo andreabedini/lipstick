@@ -247,6 +247,7 @@ module Lipstick
   , detectEnv
   , detectEnvQuery
   , detectProfile
+  , detectWidth
   , queryDarkBackground
 
     -- * Compositing
