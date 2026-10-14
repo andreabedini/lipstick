@@ -5,7 +5,6 @@ module Main (main) where
 import Data.Char (chr)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Lipstick.Grid (Span (..), gridLines, lineSpans, lineWidth)
@@ -109,7 +108,7 @@ widthTests =
 -- expected clusters.
 readGraphemeTests :: FilePath -> IO [(Text, [Text])]
 readGraphemeTests path = do
-  contents <- T.readFile path
+  contents <- Utf8.readFile path
   pure
     [ (T.concat cs, cs)
     | l <- T.lines contents
