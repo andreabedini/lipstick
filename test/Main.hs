@@ -580,19 +580,21 @@ tableParityTests =
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "│1│row │", "│…│…   │", "╰─┴────╯"]
     , testCase "yOffset scrolls" $ do
         take 2 (drop 3 (plainLines (table (height 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
-        visibleRows Nothing (height 7 <> yOffset 4) ["N", "What"] numbered @?= (4, 5)
+        visibleRows Nothing (height 7 <> yOffset 4) ["N", "What"] numbered @?= Just (4, 5)
     , testCase "scrolled to the end, earlier rows fill the space" $ do
-        visibleRows Nothing (height 7 <> yOffset 9) ["N", "What"] numbered @?= (7, 9)
-        visibleRows Nothing (height 7 <> yOffset 99) ["N", "What"] numbered @?= (7, 9)
+        visibleRows Nothing (height 7 <> yOffset 9) ["N", "What"] numbered @?= Just (7, 9)
+        visibleRows Nothing (height 7 <> yOffset 99) ["N", "What"] numbered @?= Just (7, 9)
     , testCase "all rows without a height" $
-        visibleRows Nothing mempty ["N"] numbered @?= (0, 9)
+        visibleRows Nothing mempty ["N"] numbered @?= Just (0, 9)
+    , testCase "an empty table shows no rows" $
+        visibleRows Nothing mempty ["N"] [] @?= Nothing
     , testCase "row rules count towards the height" $
         plainLines (table (height 8 <> rowRules True <> border asciiBorder) [] numbered)
           -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
           -- a third row would need 7.
           @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
     , testCase "too small for any row" $ do
-        visibleRows Nothing (height 3) ["N"] numbered @?= (0, -1)
+        visibleRows Nothing (height 3) ["N"] numbered @?= Nothing
         blockHeight (table (height 3) ["N"] numbered) @?= 3
     , testCase "fitContent does not stretch" $
         plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
@@ -1070,8 +1072,8 @@ deferredLayoutTests =
           @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]
     , testCase "which rows a table shows depends on its width" $ do
         let rows = [[text (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
-        visibleRows Nothing (height 8) ["N", "What"] rows @?= (0, 2)
-        visibleRows (Just 9) (height 8) ["N", "What"] rows @?= (0, 0)
+        visibleRows Nothing (height 8) ["N", "What"] rows @?= Just (0, 2)
+        visibleRows (Just 9) (height 8) ["N", "What"] rows @?= Just (0, 0)
     , testCase "list items wrap after their enumerator" $
         plainLinesAt 10 (list mempty ["one two three", "four"])
           @?= ["• one two ", "  three   ", "• four    "]

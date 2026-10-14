@@ -136,19 +136,18 @@ table m headers rows = Block $ \ctx ->
    in Measured req (\(Assign w _) -> let (g, _) = run w in (g, gridHeight g))
 
 -- | The first and last body rows a table shows, laid out in an available
--- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout'.
--- The last is one less than the first when none are shown. All rows unless
--- the table has a 'height'.
-visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> (Int, Int)
+-- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout';
+-- 'Nothing' when it shows none. All rows unless the table has a 'height'.
+visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> Maybe (Int, Int)
 visibleRows avail m headers rows = snd (run (maybe (reqMax req) (takenWidth req) avail))
   where
     (req, run) = tableLayout defTextStyle m headers rows
 
 -- | What a table asks for, and how it lays out at a width, with the body
 -- rows it shows.
-tableLayout :: TextStyle -> Mod Table -> [Block] -> [[Block]] -> (Request, Int -> (Grid, (Int, Int)))
+tableLayout :: TextStyle -> Mod Table -> [Block] -> [[Block]] -> (Request, Int -> (Grid, Maybe (Int, Int)))
 tableLayout ctx m headers rows
-  | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (Grid w 0 [], (0, -1)))
+  | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (Grid w 0 [], Nothing))
   | otherwise = (req, run)
   where
     (t, props) = runMod m defTable
@@ -202,7 +201,7 @@ tableLayout ctx m headers rows
     -- widest first, down to one column.
     columnWeight = if tableFitContent t || (not (isJust wSet) && weight == 0) then 0 else 1
 
-    run w = (fitWidth w (withProps props (maybe allLines (`take` allLines) hgt)), (firstV, lastV))
+    run w = (fitWidth w (withProps props (maybe allLines (`take` allLines) hgt)), shownRange)
       where
         tableW = cropLayoutWidth (propMaxWidth props) weight hi w
         widths = allocate (tableW - frameW) [(colLo, colHi, columnWeight) | (colLo, colHi) <- zip narrowest natural]
@@ -255,6 +254,7 @@ tableLayout ctx m headers rows
                     then last (f0 : takeWhile (\f -> linesFor f l0 <= avail) [f0 - 1, f0 - 2 .. 0])
                     else f0
              in (f1, l0)
+        shownRange = if lastV >= firstV then Just (firstV, lastV) else Nothing
         shown = take (lastV - firstV + 1) (drop firstV bodyLines)
         overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
         body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
