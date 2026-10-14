@@ -217,7 +217,7 @@ class HasWrap f where
   overWrap :: (Bool -> Bool) -> f -> f
 
 data Sides a = Sides {sideTop, sideRight, sideBottom, sideLeft :: !a}
-  deriving (Eq, Show)
+  deriving (Eq, Show, Functor)
 
 uniformSides :: a -> Sides a
 uniformSides a = Sides a a a a
@@ -338,13 +338,15 @@ unsetLink = attrsMod (\a -> a {attrLink = Nothing})
 
 -- Padding and margins ---------------------------------------------------------
 
+-- Negative padding and margins count as 0.
 paddingMod :: HasBox f => (Sides Int -> Sides Int) -> Mod f
-paddingMod g = fieldMod (overBox (\b -> b {boxPadding = g (boxPadding b)}))
+paddingMod g = fieldMod (overBox (\b -> b {boxPadding = fmap (max 0) (g (boxPadding b))}))
 
 marginMod :: HasBox f => (Sides Int -> Sides Int) -> Mod f
-marginMod g = fieldMod (overBox (\b -> b {boxMargin = g (boxMargin b)}))
+marginMod g = fieldMod (overBox (\b -> b {boxMargin = fmap (max 0) (g (boxMargin b))}))
 
--- | @padding vertical horizontal@
+-- | @padding vertical horizontal@. Negative amounts count as 0, as for
+-- all padding and margins.
 padding :: HasBox f => Int -> Int -> Mod f
 padding v h = paddingMod (const (Sides v h v h))
 

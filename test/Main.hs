@@ -659,6 +659,10 @@ renderTests =
         plainLines (render (width 5 <> noWrap) "abcdefgh\nabc") @?= ["abcd…", "abc  "]
     , testCase "noWrap does not cut a wide character in half" $
         plainLines (render (width 4 <> noWrap) "日本語") @?= ["日 …"]
+    , testCase "negative padding and margins count as 0" $ do
+        render (border normalBorder <> padding 0 (-1)) "hello" @?= render (border normalBorder) "hello"
+        render (border normalBorder <> margin (-1) (-2)) "hello" @?= render (border normalBorder) "hello"
+        getPadding (paddingLeft (-3)) @?= Sides 0 0 0 0
     , testCase "inherit keeps padding" $
         plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
     ]
