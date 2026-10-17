@@ -198,6 +198,16 @@ fromAnsiTests =
         parsed "\ESC[1;31mred\ESC[0m plain" @?= "\ESC[0;1;31mred\ESC[0m plain"
     , testCase "256 and RGB colours" $
         parsed "\ESC[38;5;200;48;2;1;2;3mx" @?= "\ESC[0;38;5;200;48;2;1;2;3mx\ESC[0m"
+    , testCase "a colour cut short does not turn into attributes" $ do
+        parsed "\ESC[38;5mA" @?= "A"
+        parsed "\ESC[48;5mA" @?= "A"
+        parsed "\ESC[1;38;2;1;2mA" @?= "\ESC[0;1mA\ESC[0m"
+        parsed "\ESC[38:5mA" @?= "A"
+    , testCase "a colour out of range is ignored" $ do
+        parsed "\ESC[31;38;5;300;1mA" @?= "\ESC[0;1;31mA\ESC[0m"
+        parsed "\ESC[38;2;999;0;0mA" @?= "A"
+        parsed "\ESC[31;38:5:300mA" @?= "\ESC[0;31mA\ESC[0m"
+        parsed "\ESC[18446744073709551647mA" @?= "A"
     , testCase "colon forms" $
         parsed "\ESC[4:3;58:2::10:20:30;38:5:9mx" @?= "\ESC[0;4:3;91;58;2;10;20;30mx\ESC[0m"
     , testCase "off codes unset" $
