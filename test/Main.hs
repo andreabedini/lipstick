@@ -261,6 +261,14 @@ extrasTests =
     "style extras"
     [ testCase "inline ignores the box" $
         plainLines (render (inline <> padding 1 1 <> border normalBorder <> width 20) "a\nb") @?= ["ab"]
+    , -- Quadratic versions took seconds (styleRanges) and minutes
+      -- (styleIndices) on this text.
+      localOption (mkTimeout 5000000) $ testCase "styleRanges and styleIndices take linear time" $ do
+        let long = T.replicate 40000 "word "
+            n = T.length long
+            size = T.length . renderPlain . fromInline
+        size (styleRanges [(0, n, bold)] (plain long)) @?= n
+        size (styleIndices [0, 2 .. n] bold mempty (plain long)) @?= n
     , testCase "inline respects maxWidth" $
         plainLines (render (inline <> maxWidth 3) "abcdef") @?= ["abc"]
     , testCase "inline keeps attributes" $
