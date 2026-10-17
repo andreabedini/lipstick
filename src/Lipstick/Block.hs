@@ -100,6 +100,7 @@ module Lipstick.Block
   , vcat
   ) where
 
+import Data.IntSet qualified as IntSet
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Grid (Grid, gridHeight, gridWidth)
@@ -232,7 +233,11 @@ styleRanges ranges = restyle $ \col _ ->
 -- "\ESC[0;4mf\ESC[0moo\ESC[0;4mb\ESC[0mar"
 styleIndices :: [Int] -> Mod Inline -> Mod Inline -> Inline -> Inline
 styleIndices indices matched unmatched = restyle $ \_ i ->
-  propAttrs (propsOf (if i `elem` indices then matched else unmatched))
+  if IntSet.member i chosen then on else off
+  where
+    chosen = IntSet.fromList indices
+    on = propAttrs (propsOf matched)
+    off = propAttrs (propsOf unmatched)
 
 -- | Layer extra attributes over each cluster, given its starting column and
 -- its index.
@@ -244,7 +249,8 @@ restyle extra (Inline segs) = Inline (merge (go 0 0 (styledClusters segs)))
       | T.any (== '\n') c = (a, c) : go col i rest
       | c == T.singleton '\t' = (a <> extra col i, c) : go (col + textTabWidth defTextStyle) (i + 1) rest
       | otherwise = (a <> extra col i, c) : go (col + cw) (i + 1) rest
-    merge ((a1, t1) : (a2, t2) : rest)
-      | a1 == a2 = merge ((a1, t1 <> t2) : rest)
-    merge (x : rest) = x : merge rest
+    -- Runs of clusters with the same attributes, each joined once.
+    merge ((a, t) : rest) =
+      let (same, rest') = span ((== a) . fst) rest
+       in (a, T.concat (t : map snd same)) : merge rest'
     merge [] = []
