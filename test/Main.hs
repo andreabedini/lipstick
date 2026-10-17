@@ -8,6 +8,7 @@ import Data.Text qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Lipstick.Grid (Span (..), gridLines, lineSpans, lineWidth)
+import Lipstick.Internal.Color (Color (..))
 import Lipstick.Internal.Layout (Assign (..), Measured (..), Request (..), allocate, allocateWithin, measure)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv, widthFromEnv)
 import Lipstick.Width (clusters)
@@ -54,6 +55,13 @@ plainLines :: Block -> [Text]
 plainLines = T.lines . renderPlain
 
 -- | Blocks are equal when they lay out the same at their natural width.
+-- | An environment, field by field.
+renderEnv :: ColorProfile -> Bool -> Maybe Int -> RenderEnv
+renderEnv p dark w = defaultRenderEnv {envProfile = p, envDarkBackground = dark, envWidth = w}
+
+rectOf :: Rect -> (Int, Int, Int, Int)
+rectOf r = (rectX r, rectY r, rectWidth r, rectHeight r)
+
 (@?~) :: Block -> Block -> Assertion
 a @?~ b = layout Nothing a @?= layout Nothing b
 
@@ -61,7 +69,7 @@ infix 1 @?~
 
 -- | The plain lines of a block laid out in a width.
 plainLinesAt :: Int -> Block -> [Text]
-plainLinesAt w = T.lines . toAnsi (RenderEnv NoTTY True (Just w))
+plainLinesAt w = T.lines . toAnsi (renderEnv NoTTY True (Just w))
 
 widthTests :: TestTree
 widthTests =
@@ -141,6 +149,10 @@ colorTests =
     , testCase "short hex" $ hex "#f80" @?= Just (RGB 255 136 0)
     , testCase "palette literal" $ ("201" :: Color) @?= Color256 201
     , testCase "basic literal" $ ("5" :: Color) @?= Color16 5
+    , testCase "colours show as the functions that make them" $ do
+        show ("#7D56F4" :: Color) @?= "rgb 125 86 244"
+        show (lightDark red (ansi256 200)) @?= "lightDark (ansi 1) (ansi256 200)"
+        show (complete "#000" "16" "0") @?= "complete (rgb 0 0 0) (ansi256 16) (ansi 0)"
     , testCase "invalid hex" $ hex "#ggg" @?= Nothing
     , testCase "red to 256" $ resolveColor ANSI256 True "#ff0000" @?= Just (TC256 196)
     , testCase "grey to 256" $ resolveColor ANSI256 True "#808080" @?= Just (TC256 244)
@@ -198,6 +210,16 @@ fromAnsiTests =
         parsed "\ESC[1;31mred\ESC[0m plain" @?= "\ESC[0;1;31mred\ESC[0m plain"
     , testCase "256 and RGB colours" $
         parsed "\ESC[38;5;200;48;2;1;2;3mx" @?= "\ESC[0;38;5;200;48;2;1;2;3mx\ESC[0m"
+    , testCase "a colour cut short does not turn into attributes" $ do
+        parsed "\ESC[38;5mA" @?= "A"
+        parsed "\ESC[48;5mA" @?= "A"
+        parsed "\ESC[1;38;2;1;2mA" @?= "\ESC[0;1mA\ESC[0m"
+        parsed "\ESC[38:5mA" @?= "A"
+    , testCase "a colour out of range is ignored" $ do
+        parsed "\ESC[31;38;5;300;1mA" @?= "\ESC[0;1;31mA\ESC[0m"
+        parsed "\ESC[38;2;999;0;0mA" @?= "A"
+        parsed "\ESC[31;38:5:300mA" @?= "\ESC[0;31mA\ESC[0m"
+        parsed "\ESC[18446744073709551647mA" @?= "A"
     , testCase "colon forms" $
         parsed "\ESC[4:3;58:2::10:20:30;38:5:9mx" @?= "\ESC[0;4:3;91;58;2;10;20;30mx\ESC[0m"
     , testCase "off codes unset" $
@@ -239,6 +261,14 @@ extrasTests =
     "style extras"
     [ testCase "inline ignores the box" $
         plainLines (render (inline <> padding 1 1 <> border normalBorder <> width 20) "a\nb") @?= ["ab"]
+    , -- Quadratic versions took seconds (styleRanges) and minutes
+      -- (styleIndices) on this text.
+      localOption (mkTimeout 5000000) $ testCase "styleRanges and styleIndices take linear time" $ do
+        let long = T.replicate 40000 "word "
+            n = T.length long
+            size = T.length . renderPlain . fromInline
+        size (styleRanges [(0, n, bold)] (plain long)) @?= n
+        size (styleIndices [0, 2 .. n] bold mempty (plain long)) @?= n
     , testCase "inline respects maxWidth" $
         plainLines (render (inline <> maxWidth 3) "abcdef") @?= ["abc"]
     , testCase "inline keeps attributes" $
@@ -406,9 +436,9 @@ layerTests =
         plainLines (overlay 0 0 "a\x200B\&b" "....") @?= ["ab.."]
     , testCase "layerHit and findLayer report bounds" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 0 <> sublayers [layer (offset 1 1 <> layerId "btn") "ok"]) "x"]
-        layerHit Nothing 2 1 ls @?= Just ("btn", Rect 2 1 2 1)
-        layerHit Nothing 0 1 ls @?= Just ("bg", Rect 0 0 4 2)
-        findLayer Nothing "btn" ls @?= Just (Rect 2 1 2 1)
+        fmap rectOf <$> layerHit Nothing 2 1 ls @?= Just ("btn", (2, 1, 2, 1))
+        fmap rectOf <$> layerHit Nothing 0 1 ls @?= Just ("bg", (0, 0, 4, 2))
+        rectOf <$> findLayer Nothing "btn" ls @?= Just (2, 1, 2, 1)
         findLayer Nothing "nope" ls @?= Nothing
     , testCase "layerAt finds the topmost named layer" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 1 <> layerId "btn") "ok", layer (offset 0 0) "x"]
@@ -589,27 +619,27 @@ tableParityTests :: TestTree
 tableParityTests =
   testGroup
     "table parity"
-    [ testCase "height shows an overflow row" $
-        plainLines (table (height 7) ["N", "What"] numbered)
+    [ testCase "maxHeight shows an overflow row" $
+        plainLines (table (maxHeight 7) ["N", "What"] numbered)
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "│1│row │", "│…│…   │", "╰─┴────╯"]
     , testCase "yOffset scrolls" $ do
-        take 2 (drop 3 (plainLines (table (height 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
-        visibleRows Nothing (height 7 <> yOffset 4) ["N", "What"] numbered @?= Just (4, 5)
+        take 2 (drop 3 (plainLines (table (maxHeight 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
+        visibleRows Nothing (maxHeight 7 <> yOffset 4) ["N", "What"] numbered @?= Just (4, 5)
     , testCase "scrolled to the end, earlier rows fill the space" $ do
-        visibleRows Nothing (height 7 <> yOffset 9) ["N", "What"] numbered @?= Just (7, 9)
-        visibleRows Nothing (height 7 <> yOffset 99) ["N", "What"] numbered @?= Just (7, 9)
-    , testCase "all rows without a height" $
+        visibleRows Nothing (maxHeight 7 <> yOffset 9) ["N", "What"] numbered @?= Just (7, 9)
+        visibleRows Nothing (maxHeight 7 <> yOffset 99) ["N", "What"] numbered @?= Just (7, 9)
+    , testCase "all rows without a maxHeight" $
         visibleRows Nothing mempty ["N"] numbered @?= Just (0, 9)
     , testCase "an empty table shows no rows" $
         visibleRows Nothing mempty ["N"] [] @?= Nothing
-    , testCase "row rules count towards the height" $
-        plainLines (table (height 8 <> rowRules True <> border asciiBorder) [] numbered)
+    , testCase "row rules count towards the maxHeight" $
+        plainLines (table (maxHeight 8 <> rowRules True <> border asciiBorder) [] numbered)
           -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
           -- a third row would need 7.
           @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
     , testCase "too small for any row" $ do
-        visibleRows Nothing (height 3) ["N"] numbered @?= Nothing
-        blockHeight (table (height 3) ["N"] numbered) @?= 3
+        visibleRows Nothing (maxHeight 3) ["N"] numbered @?= Nothing
+        blockHeight (table (maxHeight 3) ["N"] numbered) @?= 3
     , testCase "fitContent does not stretch" $
         plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "╰─┴────╯"]
@@ -618,8 +648,13 @@ tableParityTests =
     , testCase "headers are cut, not wrapped" $
         plainLines (table (width 8) ["Header text", "H"] [["a", "b"]])
           @?= ["╭────┬─╮", "│Hea…│H│", "├────┼─┤", "│a   │b│", "╰────┴─╯"]
-    , testProperty "a table never exceeds its height" $ \(Positive h) (TableData hs rs) ->
-        blockHeight (table (height h) (map fromInline hs) (map (map fromInline) rs)) <= h
+    , testCase "height is a minimum, filled with empty rows" $
+        plainLines (table (height 6) ["N"] [["0"]]) @?= ["╭─╮", "│N│", "├─┤", "│0│", "│ │", "╰─╯"]
+    , testCase "height and maxHeight together fix the height" $ do
+        blockHeight (table (height 7 <> maxHeight 7) ["N", "What"] numbered) @?= 7
+        blockHeight (table (height 7 <> maxHeight 7) ["N", "What"] (take 1 numbered)) @?= 7
+    , testProperty "a table never exceeds its maxHeight" $ \(Positive h) (TableData hs rs) ->
+        blockHeight (table (maxHeight h) (map fromInline hs) (map (map fromInline) rs)) <= h
     ]
   where
     numbered = [[text (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
@@ -635,7 +670,7 @@ outlineParityTests =
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;31m    \ESC[0mb"
     , testCase "enumerators and indenters see the item's position" $ do
-        let lastOnly = Enumerator (\p -> if isLast p then "> " else "- ") (const Nothing)
+        let lastOnly = markers (\p -> if isLast p then "> " else "- ")
         plainLines (list (enumerator lastOnly) ["a", "b", "c"]) @?= ["- a", "- b", "> c"]
         plainLines (forest (indenter (\p -> T.pack (show (itemDepth p)) <> "   ")) [Node "a\nb" [Node "c" []]])
           @?= ["└── a    ", "0   b    ", "0   └── c"]
@@ -701,8 +736,21 @@ renderTests =
         render (border normalBorder <> padding 0 (-1)) "hello" @?~ render (border normalBorder) "hello"
         render (border normalBorder <> margin (-1) (-2)) "hello" @?~ render (border normalBorder) "hello"
         getPadding (paddingLeft (-3)) @?= Sides 0 0 0 0
-    , testCase "inherit keeps padding" $
-        plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
+    , testCase "negative widths and heights count as 0" $ do
+        render (width (-5)) "hello" @?~ render (width 0) "hello"
+        render (height (-5)) "hello" @?~ render (height 0) "hello"
+        render (maxWidth (-1) <> maxHeight (-1)) "hello" @?~ render (maxWidth 0 <> maxHeight 0) "hello"
+        blockWidth (frame (border normalBorder) (render (width (-5)) "a")) @?= 2
+        blockWidth (table (width (-4)) ["a", "b"] [["abc", "def"]]) @?= blockWidth (table (width 0) ["a", "b"] [["abc", "def"]])
+    , testCase "inherit leaves out padding and margins" $
+        plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> marginLeft 3 <> bold)) "x") @?= [" x"]
+    , testCase "settings after inherit win" $ do
+        let parent = fg "4" <> width 20 <> border doubleBorder <> paddingLeft 5
+            s = inherit parent <> fg "1" <> width 10
+        (attrFg (getAttrs s), getWidth s, getBorder s == Just doubleBorder, getPadding s)
+          @?= (Just "1", Just 10, True, Sides 0 0 0 0)
+    , testCase "inherit keeps the margin colour" $
+        getMarginBg (inherit (marginBg "4" <> marginLeft 2)) @?= Just "4"
     ]
 
 layoutTests :: TestTree
@@ -734,16 +782,16 @@ ansiTests =
         toAnsi defaultRenderEnv (render (bold <> fg "#ff0000") "hi")
           @?= "\ESC[0;1;38;2;255;0;0mhi\ESC[0m"
     , testCase "downsampled to 256" $
-        toAnsi (RenderEnv ANSI256 True Nothing) (render (fg "#ff0000") "hi")
+        toAnsi (renderEnv ANSI256 True Nothing) (render (fg "#ff0000") "hi")
           @?= "\ESC[0;38;5;196mhi\ESC[0m"
     , testCase "basic colours" $
-        toAnsi (RenderEnv ANSI16 True Nothing) (render (fg red <> bg brightBlue) "hi")
+        toAnsi (renderEnv ANSI16 True Nothing) (render (fg red <> bg brightBlue) "hi")
           @?= "\ESC[0;31;104mhi\ESC[0m"
     , testCase "ascii keeps attributes, drops colours" $
-        toAnsi (RenderEnv Ascii True Nothing) (render (bold <> fg red) "hi")
+        toAnsi (renderEnv Ascii True Nothing) (render (bold <> fg red) "hi")
           @?= "\ESC[0;1mhi\ESC[0m"
     , testCase "NoTTY is plain" $
-        toAnsi (RenderEnv NoTTY True Nothing) (render (bold <> fg red <> link "x") "hi") @?= "hi"
+        toAnsi (renderEnv NoTTY True Nothing) (render (bold <> fg red <> link "x") "hi") @?= "hi"
     , testCase "nested style keeps outer background" $
         toAnsi defaultRenderEnv (render (bg "1") (styled bold "a" <> "b"))
           @?= "\ESC[0;1;41ma\ESC[0;41mb\ESC[0m"
@@ -751,7 +799,7 @@ ansiTests =
         toAnsi defaultRenderEnv (render (underline <> bg "1" <> paddingLeft 1) "a")
           @?= "\ESC[0;41m \ESC[0;4;41ma\ESC[0m"
     , testCase "curly underline downgraded below true colour" $
-        toAnsi (RenderEnv ANSI256 True Nothing) (render (underlineStyle CurlyUnderline) "a")
+        toAnsi (renderEnv ANSI256 True Nothing) (render (underlineStyle CurlyUnderline) "a")
           @?= "\ESC[0;4ma\ESC[0m"
     , testCase "hyperlink" $
         toAnsi defaultRenderEnv (render (link "https://x.y") "a")
@@ -772,15 +820,15 @@ ansiTests =
         (path, h) <- openTempFile dir "lipstick.txt"
         hSetEncoding h =<< mkTextEncoding "ASCII"
         let b = render (border roundedBorder) "héllo"
-        hPutBlockWith (RenderEnv NoTTY True Nothing) h b
+        hPutBlockWith (renderEnv NoTTY True Nothing) h b
         hClose h
         out <- Utf8.readFile path
         removeFile path
         out @?= renderPlain b <> "\n"
     , testCase "light/dark resolved at output" $ do
         let b = render (fg (lightDark "1" "2")) "a"
-        toAnsi (RenderEnv TrueColor True Nothing) b @?= "\ESC[0;32ma\ESC[0m"
-        toAnsi (RenderEnv TrueColor False Nothing) b @?= "\ESC[0;31ma\ESC[0m"
+        toAnsi (renderEnv TrueColor True Nothing) b @?= "\ESC[0;32ma\ESC[0m"
+        toAnsi (renderEnv TrueColor False Nothing) b @?= "\ESC[0;31ma\ESC[0m"
     ]
 
 profileTests :: TestTree
@@ -1051,6 +1099,14 @@ deferredLayoutTests =
         plainLinesAt 5 (place (align center) "x") @?= ["  x  "]
     , testCase "place keeps its natural width when there is no limit" $
         plainLines (place (align center) "x") @?= ["x"]
+    , testCase "a place's width is its width, as a style's" $ do
+        plainLines (place (width 5) "hello world") @?= ["hello", "world"]
+        blockWidth (place (width 5) "hi") @?= 5
+        plainLinesAt 3 (place (width 5) "hi") @?= ["hi "]
+    , testCase "an outline's width is its width, as a style's" $ do
+        plainLines (list (width 8) ["one two three"]) @?= ["• one   ", "  two   ", "  three "]
+        blockWidth (list (width 8) ["a"]) @?= 8
+        gridWidth (layout (Just 4) (list (width 8) ["a b"])) @?= 4
     , testCase "a table fits the width it is given, wrapping its cells" $
         -- Even the longest words (8 and 9) do not fit side by side in 14
         -- columns, so the columns shrink widest first below them.
@@ -1086,8 +1142,8 @@ deferredLayoutTests =
           @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]
     , testCase "which rows a table shows depends on its width" $ do
         let rows = [[text (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
-        visibleRows Nothing (height 8) ["N", "What"] rows @?= Just (0, 2)
-        visibleRows (Just 9) (height 8) ["N", "What"] rows @?= Just (0, 0)
+        visibleRows Nothing (maxHeight 8) ["N", "What"] rows @?= Just (0, 2)
+        visibleRows (Just 9) (maxHeight 8) ["N", "What"] rows @?= Just (0, 0)
     , testCase "list items wrap after their enumerator" $
         plainLinesAt 10 (list mempty ["one two three", "four"])
           @?= ["• one two ", "  three   ", "• four    "]
@@ -1099,7 +1155,7 @@ deferredLayoutTests =
     , testCase "a layer reflows in a narrow canvas" $ do
         let ls = [layer mempty (text "aaaa bbbb"), layer (offset 2 0 <> layerId "top") "x"]
         plainLinesAt 6 (compose ls) @?= ["aaxa  ", "bbbb  "]
-        findLayer (Just 6) "top" ls @?= Just (Rect 2 0 1 1)
+        rectOf <$> findLayer (Just 6) "top" ls @?= Just (2, 0, 1, 1)
     , testCase "a column aligns blocks that do not grow" $
         plainLinesAt 8 (joinVertical right [render fillWidth "abc", "d"])
           @?= ["abc     ", "       d"]

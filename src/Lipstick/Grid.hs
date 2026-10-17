@@ -35,7 +35,7 @@ module Lipstick.Grid
   , lineWidth
   , lineCells
   , lineSpans
-  , Span (..)
+  , Span (spanAttrs, spanText, spanWidth)
 
     -- * Cells
   , Cell
@@ -53,14 +53,20 @@ import Lipstick.Internal.Types (Attrs)
 -- >>> import Lipstick
 -- >>> import Lipstick.Grid
 
-gridWidth, gridHeight :: Grid -> Int
+-- | The width in columns, the same for every line.
+gridWidth :: Grid -> Int
 gridWidth = I.gridWidth
+
+-- | The number of lines.
+gridHeight :: Grid -> Int
 gridHeight = I.gridHeight
 
 -- | The lines, from the top.
 gridLines :: Grid -> [Line]
 gridLines = I.gridLines
 
+-- | The width in columns: the sum of the cells' widths, and the
+-- grid's 'gridWidth'.
 lineWidth :: Line -> Int
 lineWidth = I.lineWidth
 
@@ -72,6 +78,8 @@ lineCells = I.lineCells
 cellText :: Cell -> Text
 cellText = I.cellText
 
+-- | The attributes the cell is drawn with, from everything that styles
+-- it. Fields that nothing set are 'Nothing'.
 cellAttrs :: Cell -> Attrs
 cellAttrs = I.cellAttrs
 

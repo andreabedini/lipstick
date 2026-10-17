@@ -42,7 +42,7 @@ blockWidget env b = Widget policy Fixed $ do
 blockImage :: RenderEnv -> Block -> V.Image
 blockImage env b = V.vertCat (map line (gridLines (layout (envWidth env) b)))
   where
-    line l = V.horizCat [V.text' (attr env a) t | Span a t _ <- lineSpans l]
+    line l = V.horizCat [V.text' (attr env (spanAttrs s)) (spanText s) | s <- lineSpans l]
 
 -- | The profile to resolve colours for, given a vty output's colour mode.
 profileForColorMode :: V.ColorMode -> ColorProfile
@@ -54,7 +54,7 @@ profileForColorMode = \case
   V.FullColor -> TrueColor
 
 attr :: RenderEnv -> Attrs -> V.Attr
-attr (RenderEnv profile dark _) a
+attr env a
   | profile == NoTTY = V.defAttr
   | otherwise =
       withColor V.withForeColor (attrFg a)
@@ -62,7 +62,8 @@ attr (RenderEnv profile dark _) a
         . withLink (attrLink a)
         $ foldl V.withStyle V.defAttr styles
   where
-    withColor f c x = maybe x (f x . vtyColor) (c >>= resolveColor profile dark)
+    profile = envProfile env
+    withColor f c x = maybe x (f x . vtyColor) (c >>= resolveColor profile (envDarkBackground env))
     withLink url x = maybe x (V.withURL x . escapeUri) url
     on f = fromMaybe False (f a)
     styles =

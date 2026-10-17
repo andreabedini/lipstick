@@ -11,8 +11,70 @@
 -- > main :: IO ()
 -- > main = putBlock (render card "Hello, kitty")
 --
--- This module exports the whole API. It is also split into modules by
--- feature, each with more examples:
+-- == Concepts
+--
+-- [Modifiers] A @'Mod' f@ is a change to a thing @f@: a 'Style', a
+-- 'Table', an 'Outline', a 'Place' or a 'Layer'. Modifiers form a monoid:
+-- '<>' applies the left one first, so later settings win, and 'mempty'
+-- changes nothing. Text attributes ('fg', 'bold', 'link', …) and the
+-- 'maxWidth' and 'maxHeight' crop work on every thing. The other
+-- modifiers work on the things that have the part they set, which the
+-- classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and 'HasWrap' say;
+-- a modifier on a thing without that part is a type error. A modifier
+-- meant for several kinds of thing needs a signature, as in
+-- @base :: Mod f@ or @boxed :: (HasBorder f, HasSize f) => Mod f@:
+-- without one, the monomorphism restriction fixes its type.
+--
+-- [Text] 'Inline' is text with styles: string literals, 'styled' pieces
+-- joined with '<>', and text with escape sequences read by 'fromAnsi'.
+-- Styles nest, and the enclosing style shows through wherever an inner
+-- one does not set an attribute.
+--
+-- [Blocks] A 'Block' is a rectangle of styled text: 'render' and
+-- 'frame' draw text and blocks in a box, and 'table', 'list', 'tree',
+-- 'place' and 'compose' make the other kinds. Blocks are joined with
+-- 'hcat', 'vcat', 'joinHorizontal' and 'joinVertical'. A block is not laid
+-- out until it is printed: it knows the narrowest width it can take
+-- without breaking words and the width it would like, and is laid out in
+-- the width it is given, so text wraps, table columns shrink, and blocks
+-- with 'fillWidth' take the spare columns of their row. The text settings
+-- of a style ('align', 'noWrap', 'breakAfter', 'tabWidth', 'transform')
+-- also apply to the text inside the blocks it frames, unless something
+-- nearer sets them again.
+--
+-- [Sizes] They mean the same for every thing that has them. @'width' n@
+-- is the width when there is room for it: the content is laid out in @n@
+-- columns, and with less room the thing shrinks. @'height' n@ is the
+-- least number of lines. 'maxWidth' and 'maxHeight' are the most, and
+-- crop what does not fit; a table leaves out rows instead. For a style,
+-- 'width' and 'height' include padding and border but not margins.
+--
+-- [Output] Nothing becomes escape sequences until a block is printed.
+-- A 'RenderEnv' says what the output can show (the colour profile,
+-- whether the background is dark) and its width; 'putBlock' detects it
+-- for the terminal, 'toAnsi' gives the text for a given one, and
+-- 'renderPlain' gives text without escape sequences. Adaptive colours
+-- ('lightDark', 'complete') are resolved then, and colours are reduced
+-- to what the output supports. 'layout' gives the laid-out 'Grid', to
+-- show blocks in other ways ("Lipstick.Grid", the lipstick-brick
+-- package).
+--
+-- == Names
+--
+-- The names are short and some are common: 'bold', 'fg', 'border',
+-- 'center', 'text', 'render', 'width' and the colour names are also
+-- exported by brick, vty, colour or prettyprinter. Programs that use
+-- those as well can import lipstick qualified,
+--
+-- > import Lipstick qualified as L
+--
+-- or import only the names they need.
+--
+-- == Modules
+--
+-- This module exports what most programs need. The API is also split
+-- into modules by feature, each with more examples, and "Lipstick.Grid",
+-- "Lipstick.Width" and "Lipstick.Terminal" have a few functions more:
 --
 -- * "Lipstick.Mod": modifiers, which configure everything below
 -- * "Lipstick.Style": text in a box with padding, border and margins
@@ -113,7 +175,7 @@ module Lipstick
   , escapeUri
   , styleRanges
   , styleIndices
-  , Attrs (..)
+  , Attrs (attrFg, attrBg, attrUnderlineColor, attrBold, attrFaint, attrItalic, attrBlink, attrReverse, attrStrikethrough, attrUnderline, attrLink)
 
     -- * Layout
     -- | Blocks side by side, stacked, or placed in a larger area. See
@@ -214,7 +276,7 @@ module Lipstick
     -- >>> putBlock (render (border roundedBorder <> borderBottom False) "open below")
     -- ╭──────────╮
     -- │open below│
-  , Border (..)
+  , Border (topEdge, bottomEdge, leftEdge, rightEdge, topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner, middleLeft, middleRight, middle, middleTop, middleBottom)
   , border
   , borderFg
   , borderBg
@@ -347,7 +409,7 @@ module Lipstick
   , nestedList
   , Tree (..)
   , Forest
-  , ItemPos (..)
+  , ItemPos (itemDepth, itemIndex, itemSiblings)
   , rootStyle
   , itemStyle
   , itemStyleWith
@@ -356,7 +418,8 @@ module Lipstick
   , indenterStyle
   , indenterStyleWith
   , itemOffset
-  , Enumerator (..)
+  , Enumerator (enumMarker, enumIndent)
+  , markers
   , enumerator
   , byDepth
   , isLast
@@ -374,7 +437,7 @@ module Lipstick
     -- | See "Lipstick.Color".
     --
     -- >>> blend 3 ["#ff0000", "#0000ff"]
-    -- [RGB 255 0 0,RGB 140 83 162,RGB 0 0 255]
+    -- [rgb 255 0 0,rgb 140 83 162,rgb 0 0 255]
     -- >>> resolveColor TrueColor True (lightDark "#5A3FC0" "#B39DFF")
     -- Just (TCRGB 179 157 255)
   , module Lipstick.Color
@@ -388,7 +451,7 @@ module Lipstick
     -- "\ESC[0;35mpink\ESC[0m"
     -- >>> renderPlain (render (fg "#F25D94") "pink")
     -- "pink"
-  , RenderEnv (..)
+  , RenderEnv (envProfile, envDarkBackground, envWidth)
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines
@@ -424,7 +487,7 @@ module Lipstick
   , layerAt
   , layerHit
   , findLayer
-  , Rect (..)
+  , Rect (rectX, rectY, rectWidth, rectHeight)
 
     -- * Measuring text
     -- | Display widths. See "Lipstick.Width".

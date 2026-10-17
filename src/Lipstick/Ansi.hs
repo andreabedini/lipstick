@@ -44,7 +44,7 @@
 -- >>> ansiWidth "\ESC[1;32mok\ESC[0m 3 tests passed"
 -- 17
 module Lipstick.Ansi
-  ( RenderEnv (..)
+  ( RenderEnv (envProfile, envDarkBackground, envWidth)
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines
@@ -62,6 +62,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word8)
 import Lipstick.Color
+import Lipstick.Internal.Color (Color (..))
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Block, layout)
 import Lipstick.Internal.Types
@@ -258,15 +259,17 @@ fromAnsi = Inline . go mempty
       _ -> a
 
 -- | SGR parameters: groups separated by @;@, each with @:@ sub-parameters.
--- Missing numbers count as 0.
+-- Missing numbers count as 0. Numbers too long to mean anything are kept
+-- out of range rather than read modulo the size of 'Int'.
 sgrGroups :: Text -> [[Int]]
 sgrGroups params
   | T.null params = [[0]]
   | otherwise = map (map number . T.splitOn ":") (T.splitOn ";" params)
   where
     number t
-      | not (T.null t), T.all isDigit t = read (T.unpack t)
-      | otherwise = 0
+      | T.null t || not (T.all isDigit t) = 0
+      | T.length t > 6 = 1000000
+      | otherwise = read (T.unpack t)
 
 applySGR :: [[Int]] -> Attrs -> Attrs
 applySGR groups a = case groups of
@@ -297,11 +300,14 @@ applySGR groups a = case groups of
     [39] -> next a {attrFg = Nothing}
     [49] -> next a {attrBg = Nothing}
     [59] -> next a {attrUnderlineColor = Nothing}
-    -- "38;5;n" and "38;2;r;g;b"
+    -- "38;5;n" and "38;2;r;g;b". A colour out of range is ignored; when
+    -- the colour is cut short, or of an unknown kind, the parameters left
+    -- are taken to be part of it and ignored too, rather than read as
+    -- attributes.
     [n] | isColorParam n -> case gs of
-      [5] : [i] : rest -> applySGR rest (setColor n (Just (Color256 (fromIntegral i))) a)
-      [2] : [r] : [g] : [b] : rest -> applySGR rest (setColor n (Just (rgbOf r g b)) a)
-      _ -> next a
+      [5] : [i] : rest -> applySGR rest (setColor n (palette i) a)
+      [2] : [r] : [g] : [b] : rest -> applySGR rest (setColor n (rgbOf r g b) a)
+      _ -> a
     -- "38:5:n", "38:2:r:g:b" and "38:2:colourspace:r:g:b"
     n : sub | isColorParam n -> next (setColor n (colon sub) a)
     _ -> next a
@@ -311,16 +317,20 @@ applySGR groups a = case groups of
     isColorParam n = n == 38 || n == 48 || n == 58
 
     colon = \case
-      [5, i] -> Just (Color256 (fromIntegral i))
-      [2, r, g, b] -> Just (rgbOf r g b)
-      2 : _ : r : g : b : _ -> Just (rgbOf r g b)
+      [5, i] -> palette i
+      [2, r, g, b] -> rgbOf r g b
+      2 : _ : r : g : b : _ -> rgbOf r g b
       _ -> Nothing
 
-    rgbOf r g b = RGB (fromIntegral r) (fromIntegral g) (fromIntegral b)
+    byte i = if i >= 0 && i <= 255 then Just (fromIntegral i) else Nothing
+    palette i = Color256 <$> byte i
+    rgbOf r g b = RGB <$> byte r <*> byte g <*> byte b
 
-    setColor n c x = case n of
-      38 -> x {attrFg = c}
-      48 -> x {attrBg = c}
+    -- Without a colour, the attributes are left as they were.
+    setColor n c x = case (n, c) of
+      (_, Nothing) -> x
+      (38, _) -> x {attrFg = c}
+      (48, _) -> x {attrBg = c}
       _ -> x {attrUnderlineColor = c}
 
     underlineFrom n = case n of

@@ -76,7 +76,7 @@ module Lipstick.Outline
   , nestedList
 
     -- * Styling
-  , ItemPos (..)
+  , ItemPos (itemDepth, itemIndex, itemSiblings)
   , rootStyle
   , itemStyle
   , itemStyleWith
@@ -87,7 +87,8 @@ module Lipstick.Outline
   , itemOffset
 
     -- * Enumerators
-  , Enumerator (..)
+  , Enumerator (enumMarker, enumIndent)
+  , markers
   , enumerator
   , byDepth
   , isLast
@@ -116,7 +117,15 @@ import Lipstick.Style (Style, frame, render)
 -- $setup
 -- >>> import Lipstick
 
--- | How items are marked.
+-- | How items are marked. Make one with 'markers', and change its fields
+-- with record update syntax:
+--
+-- >>> let arrows = (markers (\p -> if isLast p then "└> " else "├> ")) {enumIndent = \p -> Just (if isLast p then "   " else "│  ")}
+-- >>> putBlock (tree (enumerator arrows) (Node "root" [Node "a" [Node "a.1" []], Node "b" []]))
+-- root
+-- ├> a
+-- │  └> a.1
+-- └> b
 data Enumerator = Enumerator
   { enumMarker :: ItemPos -> Text
   -- ^ the marker for an item
@@ -134,6 +143,10 @@ data ItemPos = ItemPos
   }
   deriving (Eq, Show)
 
+-- | The settings of a list or tree: its enumerator and indenter, the
+-- styles of the root, items, enumerators and indentation, its size, and
+-- the items it shows. Change them with the @t'Mod' t'Outline'@ passed to
+-- 'tree', 'forest', 'list' or 'nestedList'.
 data Outline = Outline
   { outEnumerator :: Enumerator
   , outIndenter :: Maybe (ItemPos -> Text)
@@ -146,10 +159,11 @@ data Outline = Outline
   }
 
 -- | Items are laid out in the width left after their indentation and
--- enumerator, so their text wraps to fit. 'width' pads every line to at
--- least that many columns, with the background of its item's style, and
--- 'fillWidth' to the width the outline is given; 'height' pads with blank
--- lines.
+-- enumerator, so their text wraps to fit. 'width' is the width of the
+-- outline when there is room for it, as for a style: items wrap to fit it,
+-- and every line is padded to it with the background of its item's style.
+-- 'fillWidth' pads to the width the outline is given, and 'height' pads
+-- with blank lines up to that many.
 instance HasSize Outline where
   overSize f o = o {outSize = f (outSize o)}
 
@@ -213,8 +227,10 @@ outlineNode :: Outline -> Props -> [(Entry, Measured)] -> Measured
 outlineNode o props entries = Measured req run
   where
     Size wSet hSet weight _ = outSize o
-    natural = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])
-    smallest = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])
+    -- With a width, that is the width when there is room for it, as for a
+    -- style; items wrap to fit.
+    natural = fromMaybe (maximum (0 : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])) wSet
+    smallest = fromMaybe (maximum (0 : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])) wSet
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     capH x = maybe x (min x . max 0) (propMaxHeight props)
     req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False False
@@ -240,7 +256,7 @@ fillOf = fillAttrs . propAttrs . propsOf
 -- | The entries of a level of items, below the indentation of the levels
 -- above.
 items :: TextStyle -> Outline -> Int -> [Cell] -> Forest Block -> [Entry]
-items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
+items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markerCells kids)
   where
     kids =
       if depth == 0
@@ -252,8 +268,8 @@ items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markers kids)
     styledLine m t = concat (take 1 (gridCells (layoutIn ctx Nothing (render m (plain t)))))
     enumStyle i = outEnumStyle o (pos i)
     indentStyle i = maybe (enumStyle i) ($ pos i) (outIndentStyle o)
-    markers = [styledLine (enumStyle i) (enumMarker e (pos i)) | i <- [0 .. n - 1]]
-    markerW = maximum (0 : map cellsWidth markers)
+    markerCells = [styledLine (enumStyle i) (enumMarker e (pos i)) | i <- [0 .. n - 1]]
+    markerW = maximum (0 : map cellsWidth markerCells)
 
     item i mk (Node b children) =
       let -- Alignment space keeps the enumerator's background, as lipgloss.
@@ -343,8 +359,18 @@ branches lastBranch =
     , enumIndent = \p -> Just (if isLast p then "    " else "│   ")
     }
 
+-- | An enumerator with these markers, and further lines and children
+-- indented by spaces as wide as the marker.
+--
+-- >>> putBlock (list (enumerator (markers (\p -> if isLast p then "> " else "- "))) ["a", "b", "c"])
+-- - a
+-- - b
+-- > c
+markers :: (ItemPos -> Text) -> Enumerator
+markers f = Enumerator f (const Nothing)
+
 constant :: Text -> Enumerator
-constant t = Enumerator (const t) (const Nothing)
+constant t = markers (const t)
 
 -- | @• @
 bullet :: Enumerator
@@ -359,7 +385,7 @@ asterisk :: Enumerator
 asterisk = constant "* "
 
 numbered :: (Int -> Text) -> Enumerator
-numbered f = Enumerator (\p -> f (itemIndex p + 1) <> ". ") (const Nothing)
+numbered f = markers (\p -> f (itemIndex p + 1) <> ". ")
 
 -- | @1. @, @2. @, … (numbers are right-aligned)
 arabic :: Enumerator

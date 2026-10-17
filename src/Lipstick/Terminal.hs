@@ -33,7 +33,7 @@
 -- and 20 columns:
 --
 -- >>> import System.IO (stdout)
--- >>> hPutBlockWith (RenderEnv NoTTY True (Just 20)) stdout (render (border normalBorder) "A block laid out in twenty columns")
+-- >>> hPutBlockWith defaultRenderEnv {envProfile = NoTTY, envWidth = Just 20} stdout (render (border normalBorder) "A block laid out in twenty columns")
 -- ┌──────────────────┐
 -- │A block laid out  │
 -- │in twenty columns │
@@ -122,7 +122,7 @@ detectEnv h = do
   profile <- detectProfile h
   vars <- getEnvironment
   w <- detectWidth h
-  pure (RenderEnv profile (fromMaybe True (backgroundFromEnv vars)) w)
+  pure defaultRenderEnv {envProfile = profile, envDarkBackground = fromMaybe True (backgroundFromEnv vars), envWidth = w}
 
 -- | The width to lay blocks out in for a handle: @COLUMNS@ if it is set to
 -- a positive number, otherwise the width of the terminal behind the handle

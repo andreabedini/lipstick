@@ -90,6 +90,10 @@ module Lipstick.Style
   , inherit
 
     -- * Getters
+    -- | The getters read what a style sets, applied to the defaults. They
+    -- do not see what it inherits where it is used: inside a 'frame', the
+    -- 'align', 'noWrap', 'breakAfter', 'tabWidth' and 'transform' it leaves
+    -- unset come from the enclosing style.
   , getAttrs
   , getMaxWidth
   , getMaxHeight
@@ -174,6 +178,8 @@ resolveStyle m = runMod m defStyle
 tabWidth :: Int -> Mod Style
 tabWidth n = fieldMod (\s -> s {styleTabWidth = max 0 n})
 
+-- | Back to the default of 4 spaces per tab, even inside a style that
+-- sets another 'tabWidth'.
 unsetTabWidth :: Mod Style
 unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 
@@ -185,6 +191,7 @@ unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 inline :: Mod Style
 inline = fieldMod (\s -> s {styleInline = True})
 
+-- | Undo 'inline': render with the box.
 unsetInline :: Mod Style
 unsetInline = fieldMod (\s -> s {styleInline = False})
 
@@ -196,6 +203,7 @@ unsetInline = fieldMod (\s -> s {styleInline = False})
 transform :: (Text -> Text) -> Mod Style
 transform f = fieldMod (\s -> s {styleTransform = Just f})
 
+-- | No 'transform', not even one from an enclosing style.
 unsetTransform :: Mod Style
 unsetTransform = fieldMod (\s -> s {styleTransform = Nothing})
 
@@ -229,16 +237,24 @@ underlineSpaces v = fieldMod (\s -> s {styleUnderlineSpaces = Just v})
 strikethroughSpaces :: Bool -> Mod Style
 strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 
--- | Apply a parent style, keeping the padding and margins already set:
--- lipgloss's @Inherit@.
+-- | A parent style without its padding and margins, to put before a
+-- child style: in @inherit parent <> child@, the child gets the parent's
+-- settings except the padding and margins, and its own settings win, as
+-- with lipgloss's @child.Inherit(parent)@.
 --
--- >>> let parent = border roundedBorder <> padding 1 4
--- >>> putBlock (render (padding 0 1 <> inherit parent) "child")
+-- >>> let parent = border roundedBorder <> padding 1 4 <> width 20
+-- >>> putBlock (render (inherit parent <> padding 0 1 <> width 9) "child")
 -- ╭───────╮
 -- │ child │
 -- ╰───────╯
+--
+-- Settings that come after a modifier always win over it, so
+-- @child <> inherit parent@ would let the parent override the child.
 inherit :: Mod Style -> Mod Style
-inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
+inherit (Mod f g) = Mod (\s -> keepSpacing s (f s)) g
+  where
+    keepSpacing s s' =
+      s' {styleBox = (styleBox s') {boxPadding = boxPadding (styleBox s), boxMargin = boxMargin (styleBox s)}}
 
 -- | Render text in a box: @frame m ('Lipstick.Block.fromInline' inl)@.
 -- The text is word-wrapped to fit inside the padding and border: of the
@@ -465,17 +481,26 @@ blendBorder stops offset edges nl nr rows =
 getAttrs :: Mod f -> Attrs
 getAttrs = propAttrs . propsOf
 
-getMaxWidth, getMaxHeight :: Mod f -> Maybe Int
+-- | The 'maxWidth' a modifier sets (on any thing).
+getMaxWidth :: Mod f -> Maybe Int
 getMaxWidth = propMaxWidth . propsOf
+
+-- | The 'maxHeight' a modifier sets (on any thing).
+getMaxHeight :: Mod f -> Maybe Int
 getMaxHeight = propMaxHeight . propsOf
 
 field :: (Style -> a) -> Mod Style -> a
 field f = f . fst . resolveStyle
 
-getPadding, getMargins :: Mod Style -> Sides Int
+-- | The padding on each side.
+getPadding :: Mod Style -> Sides Int
 getPadding = field (boxPadding . styleBox)
+
+-- | The margins on each side.
+getMargins :: Mod Style -> Sides Int
 getMargins = field (boxMargin . styleBox)
 
+-- | The 'marginBg', if one is set.
 getMarginBg :: Mod Style -> Maybe Color
 getMarginBg = field (boxMarginBg . styleBox)
 
@@ -490,30 +515,54 @@ getBorder m =
 getBorderSides :: Mod Style -> Sides Bool
 getBorderSides m = let Edges t r b l = snd (borderEdges (field styleBorder m)) in Sides t r b l
 
-getWidth, getHeight :: Mod Style -> Maybe Int
+-- | The 'width', if one is set.
+getWidth :: Mod Style -> Maybe Int
 getWidth = field (sizeWidth . styleSize)
+
+-- | The 'height', if one is set.
+getHeight :: Mod Style -> Maybe Int
 getHeight = field (sizeHeight . styleSize)
 
-getAlign, getVAlign :: Mod Style -> Position
+-- | The horizontal alignment ('left' by default).
+getAlign :: Mod Style -> Position
 getAlign = field (alignH . styleAlign)
+
+-- | The vertical alignment ('top' by default).
+getVAlign :: Mod Style -> Position
 getVAlign = field (alignV . styleAlign)
 
+-- | How many spaces a tab becomes.
 getTabWidth :: Mod Style -> Int
 getTabWidth = field styleTabWidth
 
+-- | Whether the style is 'inline'.
 getInline :: Mod Style -> Bool
 getInline = field styleInline
 
-horizontalPadding, verticalPadding :: Mod Style -> Int
+-- | Columns of padding: left plus right.
+horizontalPadding :: Mod Style -> Int
 horizontalPadding m = let Sides _ r _ l = getPadding m in l + r
+
+-- | Rows of padding: top plus bottom.
+verticalPadding :: Mod Style -> Int
 verticalPadding m = let Sides t _ b _ = getPadding m in t + b
 
-horizontalMargins, verticalMargins :: Mod Style -> Int
+-- | Columns of margins: left plus right.
+horizontalMargins :: Mod Style -> Int
 horizontalMargins m = let Sides _ r _ l = getMargins m in l + r
+
+-- | Rows of margins: top plus bottom.
+verticalMargins :: Mod Style -> Int
 verticalMargins m = let Sides t _ b _ = getMargins m in t + b
 
-horizontalBorderSize, verticalBorderSize :: Mod Style -> Int
+-- | Columns taken by the left and right sides of the border, where they
+-- are drawn.
+horizontalBorderSize :: Mod Style -> Int
 horizontalBorderSize m = let (l, r) = borderColumns (field styleBorder m) in l + r
+
+-- | Rows taken by the top and bottom sides of the border, where they are
+-- drawn.
+verticalBorderSize :: Mod Style -> Int
 verticalBorderSize m = let Sides t _ b _ = getBorderSides m in fromEnum t + fromEnum b
 
 -- | Columns taken by padding, border and margins: what is left for content

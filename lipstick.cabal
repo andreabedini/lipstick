@@ -1,4 +1,4 @@
-cabal-version:   3.16
+cabal-version:   3.12
 name:            lipstick
 version:         0.1.0.0
 synopsis:        Style definitions for nice terminal layouts
@@ -7,8 +7,10 @@ description:
   A Haskell take on charmbracelet's lipgloss: styled, laid-out text for
   command-line output. Styles are built from composable modifiers and render
   to structured blocks, which are serialised to ANSI only at the edge.
-license:         MIT
-license-file:    LICENSE
+license:         MIT AND Unicode-3.0
+license-files:
+    LICENSE
+    LICENSE.Unicode
 author:          Andrea Bedini
 maintainer:      andrea@bedini.au
 homepage:        https://github.com/andreabedini/lipstick
@@ -59,14 +61,14 @@ library
         Lipstick.Internal.UnicodeTable
         Lipstick.Internal.Width
     build-depends:
-        base ^>=4.21.0.0,
+        base >=4.20 && <4.23,
         array ^>=0.5,
         bytestring >=0.11 && <0.13,
         text >=2.1.2 && <2.2,
         ansi-terminal ^>=1.1,
         terminal-size >=0.3.4 && <0.4,
         colour ^>=2.3,
-        containers >=0.6 && <0.8
+        containers >=0.6 && <0.9
     default-language: GHC2024
 
 executable lipstick-demo
@@ -121,14 +123,14 @@ test-suite lipstick-test
         Lipstick.Internal.UnicodeTable
         Lipstick.Internal.Width
     build-depends:
-        base ^>=4.21.0.0,
+        base >=4.20 && <4.23,
         array ^>=0.5,
         bytestring >=0.11 && <0.13,
         text >=2.1.2 && <2.2,
         ansi-terminal ^>=1.1,
         terminal-size >=0.3.4 && <0.4,
         colour ^>=2.3,
-        containers >=0.6 && <0.8,
+        containers >=0.6 && <0.9,
         directory,
         tasty ^>=1.5,
         tasty-hunit ^>=0.10,

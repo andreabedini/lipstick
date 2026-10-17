@@ -23,20 +23,22 @@ main :: IO ()
 main = putBlock (render card "Hello, kitty")
 ```
 
-![A purple card with a rounded border saying "Hello, kitty"](docs/images/quickstart.svg)
+![A purple card with a rounded border saying "Hello, kitty"](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/quickstart.svg)
 
-lipstick builds with GHC 9.12 and is not on Hackage yet. To use it, add
-the repository to your `cabal.project`:
+lipstick is on Hackage and builds with GHC 9.10, 9.12 and 9.14. Add it to
+the `build-depends` of your package:
 
 ```
-source-repository-package
-  type: git
-  location: https://github.com/andreabedini/lipstick.git
-  tag: <commit>
-  subdir: . lipstick-brick
+build-depends: lipstick ^>=0.1
 ```
 
-(`lipstick-brick` is only needed for brick and vty applications.)
+For brick and vty applications, add
+[`lipstick-brick`](https://hackage.haskell.org/package/lipstick-brick) too.
+
+The examples import `Lipstick` whole. Some of its names (`bold`, `fg`,
+`border`, `center`, `text`, `render`, `width`, the colour names) are also
+exported by brick, vty, colour or prettyprinter; programs that use those
+too can `import Lipstick qualified as L`.
 
 ## Styles are modifiers
 
@@ -67,9 +69,13 @@ Other modifiers apply to the things that have the corresponding part:
 styles, tables, lists, trees and placed blocks, `align` to styles and placed
 blocks. A modifier on something that does not support it is a type error.
 
-`width` and `height` include padding and border but not margins, as in
-lipgloss. With a width, text is word-wrapped to fit, or cut with an ellipsis
-with `noWrap`.
+The sizes mean the same for everything that has them. `width n` is the
+width when there is room for it: the content is laid out in `n` columns,
+and with less room the thing shrinks like any other. `height n` is the
+least number of lines. `maxWidth` and `maxHeight` are the most, and crop
+what does not fit. For a style, `width` and `height` include padding and
+border but not margins, as in lipgloss. With a width, text is word-wrapped
+to fit, or cut with an ellipsis with `noWrap`.
 
 ## Blocks and layout
 
@@ -84,7 +90,7 @@ joinHorizontal center
   ]
 ```
 
-![Two cards side by side, purple and pink, centred vertically](docs/images/layout.svg)
+![Two cards side by side, purple and pink, centred vertically](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/layout.svg)
 
 ```haskell
 place
@@ -92,7 +98,7 @@ place
   (render (bold <> fg "#F25D94") "centred")
 ```
 
-![The word "centred" in the middle of an area filled with dots](docs/images/place.svg)
+![The word "centred" in the middle of an area filled with dots](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/place.svg)
 
 `frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
 stack blocks, and `blockWidth` / `blockHeight` measure them. A style's
@@ -120,7 +126,7 @@ render
   (styled (bold <> fg "#F25D94") "Error: " <> "the file " <> styled italic "notes.txt" <> " was not found")
 ```
 
-![A bordered message with a bold pink "Error:" and an italic file name, wrapped to two lines](docs/images/text.svg)
+![A bordered message with a bold pink "Error:" and an italic file name, wrapped to two lines](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/text.svg)
 
 Output from other programs that already contains escape sequences goes
 through `fromAnsi`, which keeps colours, attributes and hyperlinks and drops
@@ -153,17 +159,16 @@ table
   ]
 ```
 
-![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
+![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/table.svg)
 
 Cells are blocks, so they can hold lists, other tables or anything else.
 A table fits the width it is laid out in: columns shrink, wrapping their
 cells, widest first but without breaking a word while another column can
 still wrap (headers are cut short instead), and with `fillWidth` they grow
-to fill it. With a
-`width`, columns shrink or grow to fit that instead; `fitContent` makes the
-width a maximum. With a `height`, rows that
-do not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
-which rows are shown. `headerRule`, `columnRules`, `rowRules` and the
+to fill it. With a `width`, columns shrink or grow to fit that instead;
+`fitContent` makes the width a maximum. With a `maxHeight`, rows that do
+not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
+which rows are shown; a `height` adds empty rows up to it. `headerRule`, `columnRules`, `rowRules` and the
 `border*` modifiers choose which lines are drawn.
 
 ## Lists and trees
@@ -181,7 +186,7 @@ nestedList
   [Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []], Node "Nyx" []]
 ```
 
-![A tree of operating systems with rounded purple branches, next to a list numbered with roman numerals and nested bullets](docs/images/outlines.svg)
+![A tree of operating systems with rounded purple branches, next to a list numbered with roman numerals and nested bullets](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/outlines.svg)
 
 The enumerators are `treeEnumerator`, `roundedTreeEnumerator`, `bullet`,
 `dash`, `asterisk`, `arabic`, `alphabet` and `roman`, or your own. Items,
@@ -195,7 +200,7 @@ Blocks can be stacked at any position, for dialogs, overlays and the like.
 
 ```haskell
 compose
-  [ layer (fg "#383838") background
+  [ layer (fg "#383838") (text (T.intercalate "\n" (replicate 6 (T.replicate 34 "╱"))))
   , layer (offset 7 2 <> zIndex 1) (render (bg "#0A0A0A" <> width 22 <> height 3) "")
   , layer
       (offset 5 1 <> zIndex 2 <> layerId "dialog")
@@ -203,7 +208,7 @@ compose
   ]
 ```
 
-![A dialog saying "Really quit?" with a drop shadow, over a hatched background](docs/images/layers.svg)
+![A dialog saying "Really quit?" with a drop shadow, over a hatched background](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/layers.svg)
 
 ## Colours
 
@@ -231,7 +236,7 @@ vcat
   ]
 ```
 
-![A purple-to-pink-to-yellow gradient, and a box with a gradient border containing darker, normal and lighter pink text](docs/images/colours.svg)
+![A purple-to-pink-to-yellow gradient, and a box with a gradient border containing darker, normal and lighter pink text](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/colours.svg)
 
 ## Output
 
@@ -295,12 +300,48 @@ sequences anyway), and Go-specific API such as `SetString`, `Copy`,
 `WrapWriter` and the table data interfaces, which plain values and lists
 cover.
 
+## Compared with layoutz
+
+I did not know about [layoutz](https://hackage.haskell.org/package/layoutz)
+while writing lipstick, and came across it only when preparing the first
+release. It is another Haskell library for terminal output, and it does a
+lot that lipstick does not: charts (bars, sparklines, braille line and pie
+plots, heatmaps), spinners and progress bars, inline images for kitty,
+interactive prompts and a small Elm-style application runtime, all in one
+module with only boot-package dependencies. For a quick dashboard or an
+animated script, it is worth a look.
+
+The two are built differently. layoutz renders each element to a `String`
+with escape sequences in it and measures it again by stripping them;
+lipstick renders to blocks of styled cells and produces escape sequences
+only when printing. From the source of layoutz 0.4.0.0:
+
+|                        | layoutz                                                          | lipstick                                                    |
+| ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| Width of text          | a list of wide ranges: CJK lines up, emoji sequences and flags do not | Unicode grapheme clusters and East Asian Width          |
+| Colours                | foreground only, in 16, 256 or 24-bit colour                     | foreground, background and underline; light/dark and per-profile colours; gradients |
+| Terminal support       | always prints escape sequences                                   | `NO_COLOR`, `CLICOLOR_FORCE`, `COLORTERM`, `TERM`; colours reduced to what the output shows |
+| Nested styles          | an inner style ends the outer one                                | the outer style shows through                               |
+| Layout                 | as wide as the content; wrapping at a given width                | laid out in the width available: text wraps, tables shrink their columns |
+| Tables                 | columns as wide as their widest cell                             | columns that shrink and grow, styles by cell, scrolling     |
+| Placing and layers     | no                                                               | `place`, `compose`, hit testing                             |
+| Existing ANSI text, hyperlinks | no                                                       | `fromAnsi`, `link`                                          |
+| Charts, spinners, prompts, application loop | yes                                         | no; for full-screen applications, brick through lipstick-brick |
+
 ## Development
 
 ```
 cabal build all
 cabal test all
 cabal run lipstick-demo
+```
+
+The examples in the Haddock documentation are run with
+[doctest](https://hackage.haskell.org/package/doctest), in CI too:
+
+```
+cabal install doctest
+cabal repl lipstick --with-compiler=doctest --repl-options=-XOverloadedStrings
 ```
 
 The screenshots in this README are drawn from the examples in
@@ -331,5 +372,8 @@ The conformance test data in `test/data/GraphemeBreakTest.txt` comes from
 
 MIT, see [LICENSE](LICENSE). lipstick is a port of
 [lipgloss](https://github.com/charmbracelet/lipgloss), © Charmbracelet,
-also MIT licensed. `test/data/GraphemeBreakTest.txt` is © Unicode, Inc.,
-under the [Unicode terms of use](https://www.unicode.org/terms_of_use.html).
+also MIT licensed. The Unicode tables in
+`internal/Lipstick/Internal/UnicodeTable.hs` are generated from the Unicode
+Character Database, and `test/data/GraphemeBreakTest.txt` comes from it;
+both are © Unicode, Inc., under the Unicode License v3, see
+[LICENSE.Unicode](LICENSE.Unicode).

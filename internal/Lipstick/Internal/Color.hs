@@ -13,6 +13,8 @@ module Lipstick.Internal.Color
   , complete
 
     -- ** The 16 basic colours
+    -- | What they look like is up to the terminal's palette. Where they
+    -- are turned into RGB, xterm's palette is used.
   , black, red, green, yellow, blue, magenta, cyan, white
   , brightBlack, brightRed, brightGreen, brightYellow
   , brightBlue, brightMagenta, brightCyan, brightWhite
@@ -58,7 +60,18 @@ data Color
     LightDark Color Color
   | -- | Explicit choices for true-colour, 256-colour and 16-colour terminals.
     Complete Color Color Color
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+-- | Shown as the functions that make it, since the constructors are not
+-- exported: @rgb 125 86 244@, @ansi256 201@, @ansi 5@, @lightDark …@,
+-- @complete …@.
+instance Show Color where
+  showsPrec d c = showParen (d > 10) $ case c of
+    RGB r g b -> showString "rgb " . showsPrec 11 r . showChar ' ' . showsPrec 11 g . showChar ' ' . showsPrec 11 b
+    Color256 n -> showString "ansi256 " . showsPrec 11 n
+    Color16 n -> showString "ansi " . showsPrec 11 n
+    LightDark l k -> showString "lightDark " . showsPrec 11 l . showChar ' ' . showsPrec 11 k
+    Complete t x y -> showString "complete " . showsPrec 11 t . showChar ' ' . showsPrec 11 x . showChar ' ' . showsPrec 11 y
 
 -- | Parses @"#rgb"@, @"#rrggbb"@ or a palette index @"0"@–@"255"@.
 -- Calls 'error' on anything else; use 'hex' for a total alternative.
@@ -66,6 +79,8 @@ instance IsString Color where
   fromString s =
     fromMaybe (error ("Lipstick.Color: invalid colour literal " ++ show s)) (parseColor s)
 
+-- | A 24-bit colour from its red, green and blue components. On a
+-- terminal with fewer colours, the nearest one it has is used.
 rgb :: Word8 -> Word8 -> Word8 -> Color
 rgb = RGB
 
@@ -81,6 +96,9 @@ ansi256 n = Color256 (fromIntegral (n `mod` 256))
 hex :: Text -> Maybe Color
 hex t = parseHex (T.unpack (fromMaybe t (T.stripPrefix (T.singleton '#') t)))
 
+-- | @lightDark light dark@ is @light@ on a light background and @dark@ on
+-- a dark one. The choice is made when the block is printed, from
+-- 'Lipstick.Ansi.envDarkBackground'.
 lightDark :: Color -> Color -> Color
 lightDark = LightDark
 
@@ -107,26 +125,68 @@ parseHex ds
   where
     byte = foldl (\acc c -> acc `shiftL` 4 .|. fromIntegral (digitToInt c)) 0
 
-black, red, green, yellow, blue, magenta, cyan, white :: Color
+-- | Basic colour 0: @ansi 0@.
+black :: Color
 black = Color16 0
+
+-- | Basic colour 1: @ansi 1@.
+red :: Color
 red = Color16 1
+
+-- | Basic colour 2: @ansi 2@.
+green :: Color
 green = Color16 2
+
+-- | Basic colour 3: @ansi 3@.
+yellow :: Color
 yellow = Color16 3
+
+-- | Basic colour 4: @ansi 4@.
+blue :: Color
 blue = Color16 4
+
+-- | Basic colour 5: @ansi 5@.
+magenta :: Color
 magenta = Color16 5
+
+-- | Basic colour 6: @ansi 6@.
+cyan :: Color
 cyan = Color16 6
+
+-- | Basic colour 7: @ansi 7@.
+white :: Color
 white = Color16 7
 
-brightBlack, brightRed, brightGreen, brightYellow :: Color
+-- | Basic colour 8: @ansi 8@.
+brightBlack :: Color
 brightBlack = Color16 8
+
+-- | Basic colour 9: @ansi 9@.
+brightRed :: Color
 brightRed = Color16 9
+
+-- | Basic colour 10: @ansi 10@.
+brightGreen :: Color
 brightGreen = Color16 10
+
+-- | Basic colour 11: @ansi 11@.
+brightYellow :: Color
 brightYellow = Color16 11
 
-brightBlue, brightMagenta, brightCyan, brightWhite :: Color
+-- | Basic colour 12: @ansi 12@.
+brightBlue :: Color
 brightBlue = Color16 12
+
+-- | Basic colour 13: @ansi 13@.
+brightMagenta :: Color
 brightMagenta = Color16 13
+
+-- | Basic colour 14: @ansi 14@.
+brightCyan :: Color
 brightCyan = Color16 14
+
+-- | Basic colour 15: @ansi 15@.
+brightWhite :: Color
 brightWhite = Color16 15
 
 -- | A concrete colour a terminal understands.

@@ -28,6 +28,8 @@ import Data.Text.Encoding qualified as T
 import Lipstick.Internal.Color (Color)
 import Text.Printf (printf)
 
+-- | Underline styles, for 'Lipstick.Mod.underlineStyle'. 'NoUnderline'
+-- turns off an underline an enclosing style sets.
 data Underline
   = NoUnderline
   | SingleUnderline
@@ -120,11 +122,24 @@ newtype Position = Position Double
 position :: Double -> Position
 position = Position . max 0 . min 1
 
-left, center, right, top, bottom :: Position
+-- | The left edge: position 0.
+left :: Position
 left = Position 0
+
+-- | The middle, on either axis: position 0.5.
+center :: Position
 center = Position 0.5
+
+-- | The right edge: position 1.
+right :: Position
 right = Position 1
+
+-- | The top edge: position 0.
+top :: Position
 top = Position 0
+
+-- | The bottom edge: position 1.
+bottom :: Position
 bottom = Position 1
 
 -- | Split @extra@ columns (or rows) of space into the amounts before and

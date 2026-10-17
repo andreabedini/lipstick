@@ -202,26 +202,38 @@ cropToProps p ls =
   let croppedW = maybe ls (\n -> map (cropCells n) ls) (propMaxWidth p)
    in fromCellLines (maybe croppedW (`take` croppedW) (propMaxHeight p))
 
--- | Things with padding and margins.
+-- | Things with padding and margins: 'Lipstick.Style.Style'. The
+-- modifiers 'padding', 'margin', 'marginBg', 'paddingChar', 'marginChar'
+-- and their variants apply to them.
 class HasBox f where
   overBox :: (Box -> Box) -> f -> f
 
--- | Things with a border.
+-- | Things with a border: 'Lipstick.Style.Style' and
+-- 'Lipstick.Table.Table'. The modifiers 'border', 'borderFg', 'borderTop'
+-- and the other border modifiers apply to them.
 class HasBorder f where
   overBorder :: (BorderProps -> BorderProps) -> f -> f
 
--- | Things with a size.
+-- | Things with a size: 'Lipstick.Style.Style', 'Lipstick.Table.Table',
+-- 'Lipstick.Outline.Outline' and 'Lipstick.Place.Place'. The modifiers
+-- 'width', 'height', 'grow', 'fillWidth', 'stretchHeight', 'unsetWidth' and
+-- 'unsetHeight' apply to them. ('maxWidth' and 'maxHeight' work on
+-- anything.)
 class HasSize f where
   overSize :: (Size -> Size) -> f -> f
 
--- | Things whose content can be aligned.
+-- | Things whose content can be aligned: 'Lipstick.Style.Style' and
+-- 'Lipstick.Place.Place'. The modifiers 'align', 'valign' and 'unsetAlign'
+-- apply to them.
 class HasAlign f where
   overAlign :: (Align -> Align) -> f -> f
 
--- | Things whose text can be wrapped.
+-- | Things whose text can be wrapped: 'Lipstick.Style.Style' and
+-- 'Lipstick.Table.Table'. The modifier 'noWrap' applies to them.
 class HasWrap f where
   overWrap :: (Bool -> Bool) -> f -> f
 
+-- | One value for each side: top, right, bottom and left, as in CSS.
 data Sides a = Sides {sideTop, sideRight, sideBottom, sideLeft :: !a}
   deriving (Eq, Show, Functor)
 
@@ -299,12 +311,28 @@ defAlign = Align left top
 attrsMod :: (Attrs -> Attrs) -> Mod f
 attrsMod g = propMod (\p -> p {propAttrs = g (propAttrs p)})
 
-bold, faint, italic, blink, reverseVideo, strikethrough :: Mod f
+-- | Bold text.
+bold :: Mod f
 bold = flag Bold True
+
+-- | Faint (dim) text.
+faint :: Mod f
 faint = flag Faint True
+
+-- | Italic text.
+italic :: Mod f
 italic = flag Italic True
+
+-- | Blinking text.
+blink :: Mod f
 blink = flag Blink True
+
+-- | Swap the foreground and background colours.
+reverseVideo :: Mod f
 reverseVideo = flag Reverse True
+
+-- | Text with a line through it.
+strikethrough :: Mod f
 strikethrough = flag Strikethrough True
 
 -- | Set a flag explicitly; @flag Bold False@ turns off bold inherited from
@@ -316,6 +344,7 @@ flag f v = attrsMod (setFlag f (Just v))
 unsetFlag :: Flag -> Mod f
 unsetFlag f = attrsMod (setFlag f Nothing)
 
+-- | A single underline: @underlineStyle SingleUnderline@.
 underline :: Mod f
 underline = underlineStyle SingleUnderline
 
@@ -324,25 +353,40 @@ underline = underlineStyle SingleUnderline
 underlineStyle :: Underline -> Mod f
 underlineStyle u = attrsMod (\a -> a {attrUnderline = Just u})
 
+-- | The colour of the underline, when there is one. It is printed only
+-- for the 256-colour and true-colour profiles.
 underlineColor :: Color -> Mod f
 underlineColor c = attrsMod (\a -> a {attrUnderlineColor = Just c})
 
-fg, bg :: Color -> Mod f
+-- | The foreground (text) colour.
+fg :: Color -> Mod f
 fg c = attrsMod (\a -> a {attrFg = Just c})
+
+-- | The background colour.
+bg :: Color -> Mod f
 bg c = attrsMod (\a -> a {attrBg = Just c})
 
-unsetFg, unsetBg :: Mod f
+-- | Forget the foreground colour, so an enclosing style's shows through.
+unsetFg :: Mod f
 unsetFg = attrsMod (\a -> a {attrFg = Nothing})
+
+-- | Forget the background colour, so an enclosing style's shows through.
+unsetBg :: Mod f
 unsetBg = attrsMod (\a -> a {attrBg = Nothing})
 
-unsetUnderline, unsetUnderlineColor :: Mod f
+-- | Forget the underline, so an enclosing style's shows through.
+unsetUnderline :: Mod f
 unsetUnderline = attrsMod (\a -> a {attrUnderline = Nothing})
+
+-- | Forget the underline colour, so an enclosing style's shows through.
+unsetUnderlineColor :: Mod f
 unsetUnderlineColor = attrsMod (\a -> a {attrUnderlineColor = Nothing})
 
 -- | Make the text a hyperlink (OSC 8).
 link :: Text -> Mod f
 link url = attrsMod (\a -> a {attrLink = Just url})
 
+-- | Forget the hyperlink, so an enclosing style's shows through.
 unsetLink :: Mod f
 unsetLink = attrsMod (\a -> a {attrLink = Nothing})
 
@@ -360,35 +404,65 @@ marginMod g = fieldMod (overBox (\b -> b {boxMargin = fmap (max 0) (g (boxMargin
 padding :: HasBox f => Int -> Int -> Mod f
 padding v h = paddingMod (const (Sides v h v h))
 
+-- | The same padding on all four sides.
 paddingAll :: HasBox f => Int -> Mod f
 paddingAll n = paddingMod (const (uniformSides n))
 
-paddingTop, paddingRight, paddingBottom, paddingLeft :: HasBox f => Int -> Mod f
+-- | Padding above the content, in lines.
+paddingTop :: HasBox f => Int -> Mod f
 paddingTop n = paddingMod (\s -> s {sideTop = n})
+
+-- | Padding to the right of the content, in columns.
+paddingRight :: HasBox f => Int -> Mod f
 paddingRight n = paddingMod (\s -> s {sideRight = n})
+
+-- | Padding below the content, in lines.
+paddingBottom :: HasBox f => Int -> Mod f
 paddingBottom n = paddingMod (\s -> s {sideBottom = n})
+
+-- | Padding to the left of the content, in columns.
+paddingLeft :: HasBox f => Int -> Mod f
 paddingLeft n = paddingMod (\s -> s {sideLeft = n})
 
 -- | @margin vertical horizontal@
 margin :: HasBox f => Int -> Int -> Mod f
 margin v h = marginMod (const (Sides v h v h))
 
+-- | The same margin on all four sides.
 marginAll :: HasBox f => Int -> Mod f
 marginAll n = marginMod (const (uniformSides n))
 
-marginTop, marginRight, marginBottom, marginLeft :: HasBox f => Int -> Mod f
+-- | The margin above the box, in lines.
+marginTop :: HasBox f => Int -> Mod f
 marginTop n = marginMod (\s -> s {sideTop = n})
+
+-- | The margin to the right of the box, in columns.
+marginRight :: HasBox f => Int -> Mod f
 marginRight n = marginMod (\s -> s {sideRight = n})
+
+-- | The margin below the box, in lines.
+marginBottom :: HasBox f => Int -> Mod f
 marginBottom n = marginMod (\s -> s {sideBottom = n})
+
+-- | The margin to the left of the box, in columns.
+marginLeft :: HasBox f => Int -> Mod f
 marginLeft n = marginMod (\s -> s {sideLeft = n})
 
 -- | Background colour of the margins.
 marginBg :: HasBox f => Color -> Mod f
 marginBg c = fieldMod (overBox (\b -> b {boxMarginBg = Just c}))
 
-unsetPadding, unsetMargins, unsetMarginBg :: HasBox f => Mod f
+-- | No padding on any side.
+unsetPadding :: HasBox f => Mod f
 unsetPadding = paddingMod (const (uniformSides 0))
+
+-- | No margins on any side.
+unsetMargins :: HasBox f => Mod f
 unsetMargins = marginMod (const (uniformSides 0))
+
+-- | Forget the 'marginBg': the margins have no background colour of
+-- their own.
+unsetMarginBg :: HasBox f => Mod f
 unsetMarginBg = fieldMod (overBox (\b -> b {boxMarginBg = Nothing}))
 
 -- | The character padding is filled with (default a space).
@@ -408,22 +482,50 @@ borderMod = fieldMod . overBorder
 border :: HasBorder f => Border -> Mod f
 border b = borderMod (\p -> p {borderChars = Just b})
 
-borderFg, borderBg :: HasBorder f => Color -> Mod f
+-- | The colour of the whole border. It replaces a 'borderFgBlend'
+-- gradient.
+borderFg :: HasBorder f => Color -> Mod f
 borderFg c = borderMod (\p -> p {borderFgColors = uniformSides (Just c), borderFgStops = []})
+
+-- | The background colour of the whole border.
+borderBg :: HasBorder f => Color -> Mod f
 borderBg c = borderMod (\p -> p {borderBgColors = uniformSides (Just c)})
 
--- | The colour of one side of the border. The top and bottom sides include
--- the corners.
-borderTopFg, borderRightFg, borderBottomFg, borderLeftFg :: HasBorder f => Color -> Mod f
+-- | The colour of the top side of the border, corners included. Like
+-- every side colour, it replaces a 'borderFgBlend' gradient.
+borderTopFg :: HasBorder f => Color -> Mod f
 borderTopFg c = borderFgSide (\s -> s {sideTop = Just c})
+
+-- | The colour of the right side of the border, without the corners.
+borderRightFg :: HasBorder f => Color -> Mod f
 borderRightFg c = borderFgSide (\s -> s {sideRight = Just c})
+
+-- | The colour of the bottom side of the border, corners included.
+borderBottomFg :: HasBorder f => Color -> Mod f
 borderBottomFg c = borderFgSide (\s -> s {sideBottom = Just c})
+
+-- | The colour of the left side of the border, without the corners.
+borderLeftFg :: HasBorder f => Color -> Mod f
 borderLeftFg c = borderFgSide (\s -> s {sideLeft = Just c})
 
-borderTopBg, borderRightBg, borderBottomBg, borderLeftBg :: HasBorder f => Color -> Mod f
+-- | The background colour of the top side of the border, corners
+-- included.
+borderTopBg :: HasBorder f => Color -> Mod f
 borderTopBg c = borderBgSide (\s -> s {sideTop = Just c})
+
+-- | The background colour of the right side of the border, without the
+-- corners.
+borderRightBg :: HasBorder f => Color -> Mod f
 borderRightBg c = borderBgSide (\s -> s {sideRight = Just c})
+
+-- | The background colour of the bottom side of the border, corners
+-- included.
+borderBottomBg :: HasBorder f => Color -> Mod f
 borderBottomBg c = borderBgSide (\s -> s {sideBottom = Just c})
+
+-- | The background colour of the left side of the border, without the
+-- corners.
+borderLeftBg :: HasBorder f => Color -> Mod f
 borderLeftBg c = borderBgSide (\s -> s {sideLeft = Just c})
 
 borderFgSide, borderBgSide :: HasBorder f => (Sides (Maybe Color) -> Sides (Maybe Color)) -> Mod f
@@ -444,10 +546,22 @@ unsetBorder = borderMod (const defBorderProps)
 borderFgBlend :: HasBorder f => [Color] -> Mod f
 borderFgBlend cs = borderMod (\p -> p {borderFgStops = cs})
 
-borderTop, borderRight, borderBottom, borderLeft :: HasBorder f => Bool -> Mod f
+-- | Whether the top side of the border is drawn. By default a side is
+-- drawn when a 'border' is set; switched on without one, it is drawn with
+-- 'normalBorder'.
+borderTop :: HasBorder f => Bool -> Mod f
 borderTop v = borderSide (\s -> s {sideTop = Just v})
+
+-- | Whether the right side of the border is drawn, as for 'borderTop'.
+borderRight :: HasBorder f => Bool -> Mod f
 borderRight v = borderSide (\s -> s {sideRight = Just v})
+
+-- | Whether the bottom side of the border is drawn, as for 'borderTop'.
+borderBottom :: HasBorder f => Bool -> Mod f
 borderBottom v = borderSide (\s -> s {sideBottom = Just v})
+
+-- | Whether the left side of the border is drawn, as for 'borderTop'.
+borderLeft :: HasBorder f => Bool -> Mod f
 borderLeft v = borderSide (\s -> s {sideLeft = Just v})
 
 borderSide :: HasBorder f => (Sides (Maybe Bool) -> Sides (Maybe Bool)) -> Mod f
@@ -460,13 +574,15 @@ sizeMod = fieldMod . overSize
 
 -- | Total width, including padding and border, when there is room for
 -- it. Laid out in less space (a narrow terminal, a full row), the thing
--- shrinks like any other rather than overflowing.
+-- shrinks like any other rather than overflowing. A negative width counts
+-- as 0, as do negative heights and crops.
 width :: HasSize f => Int -> Mod f
-width n = sizeMod (\s -> s {sizeWidth = Just n})
+width n = sizeMod (\s -> s {sizeWidth = Just (max 0 n)})
 
--- | Minimum total height, including padding and border.
+-- | Minimum total height, including padding and border: the thing is at
+-- least this many lines tall.
 height :: HasSize f => Int -> Mod f
-height n = sizeMod (\s -> s {sizeHeight = Just n})
+height n = sizeMod (\s -> s {sizeHeight = Just (max 0 n)})
 
 -- | Take a share of the spare width, in proportion to the weight, when the
 -- thing is laid out next to others or on its own in the output's width.
@@ -486,19 +602,28 @@ stretchHeight = sizeMod (\s -> s {sizeStretch = True})
 -- | Crop the final result (for a style, margins included) to at most this
 -- many columns.
 maxWidth :: Int -> Mod f
-maxWidth n = propMod (\p -> p {propMaxWidth = Just n})
+maxWidth n = propMod (\p -> p {propMaxWidth = Just (max 0 n)})
 
 -- | Crop the final result (for a style, margins included) to at most this
--- many rows.
+-- many rows. A table leaves out the body rows that do not fit instead (see
+-- 'Lipstick.Table.yOffset').
 maxHeight :: Int -> Mod f
-maxHeight n = propMod (\p -> p {propMaxHeight = Just n})
+maxHeight n = propMod (\p -> p {propMaxHeight = Just (max 0 n)})
 
-unsetWidth, unsetHeight :: HasSize f => Mod f
+-- | Forget the 'width'.
+unsetWidth :: HasSize f => Mod f
 unsetWidth = sizeMod (\s -> s {sizeWidth = Nothing})
+
+-- | Forget the 'height'.
+unsetHeight :: HasSize f => Mod f
 unsetHeight = sizeMod (\s -> s {sizeHeight = Nothing})
 
-unsetMaxWidth, unsetMaxHeight :: Mod f
+-- | Forget the 'maxWidth': no crop to a width.
+unsetMaxWidth :: Mod f
 unsetMaxWidth = propMod (\p -> p {propMaxWidth = Nothing})
+
+-- | Forget the 'maxHeight': no crop to a height.
+unsetMaxHeight :: Mod f
 unsetMaxHeight = propMod (\p -> p {propMaxHeight = Nothing})
 
 -- Alignment -------------------------------------------------------------------
