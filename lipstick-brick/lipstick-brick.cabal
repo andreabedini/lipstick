@@ -1,4 +1,4 @@
-cabal-version:   3.16
+cabal-version:   3.12
 name:            lipstick-brick
 version:         0.1.0.0
 synopsis:        Show lipstick blocks in brick and vty applications
@@ -13,7 +13,9 @@ maintainer:      andrea@bedini.au
 homepage:        https://github.com/andreabedini/lipstick
 bug-reports:     https://github.com/andreabedini/lipstick/issues
 build-type:      Simple
-extra-doc-files: CHANGELOG.md
+extra-doc-files:
+    CHANGELOG.md
+    README.md
 
 source-repository head
     type:     git
@@ -28,11 +30,11 @@ library
     hs-source-dirs:   src
     exposed-modules:  Lipstick.Brick
     build-depends:
-        base ^>=4.21.0.0,
+        base >=4.20 && <4.23,
         text ^>=2.1,
         lipstick ^>=0.1,
-        vty >=6.2 && <6.5,
-        brick >=2.7 && <2.11,
+        vty >=6.2 && <6.7,
+        brick >=2.7 && <3.1,
         microlens >=0.4 && <0.6
     default-language: GHC2024
 

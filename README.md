@@ -23,20 +23,17 @@ main :: IO ()
 main = putBlock (render card "Hello, kitty")
 ```
 
-![A purple card with a rounded border saying "Hello, kitty"](docs/images/quickstart.svg)
+![A purple card with a rounded border saying "Hello, kitty"](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/quickstart.svg)
 
-lipstick builds with GHC 9.12 and is not on Hackage yet. To use it, add
-the repository to your `cabal.project`:
+lipstick is on Hackage and builds with GHC 9.10, 9.12 and 9.14. Add it to
+the `build-depends` of your package:
 
 ```
-source-repository-package
-  type: git
-  location: https://github.com/andreabedini/lipstick.git
-  tag: <commit>
-  subdir: . lipstick-brick
+build-depends: lipstick ^>=0.1
 ```
 
-(`lipstick-brick` is only needed for brick and vty applications.)
+For brick and vty applications, add
+[`lipstick-brick`](https://hackage.haskell.org/package/lipstick-brick) too.
 
 ## Styles are modifiers
 
@@ -84,7 +81,7 @@ joinHorizontal center
   ]
 ```
 
-![Two cards side by side, purple and pink, centred vertically](docs/images/layout.svg)
+![Two cards side by side, purple and pink, centred vertically](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/layout.svg)
 
 ```haskell
 place
@@ -92,7 +89,7 @@ place
   (render (bold <> fg "#F25D94") "centred")
 ```
 
-![The word "centred" in the middle of an area filled with dots](docs/images/place.svg)
+![The word "centred" in the middle of an area filled with dots](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/place.svg)
 
 `frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
 stack blocks, and `blockWidth` / `blockHeight` measure them. A style's
@@ -120,7 +117,7 @@ render
   (styled (bold <> fg "#F25D94") "Error: " <> "the file " <> styled italic "notes.txt" <> " was not found")
 ```
 
-![A bordered message with a bold pink "Error:" and an italic file name, wrapped to two lines](docs/images/text.svg)
+![A bordered message with a bold pink "Error:" and an italic file name, wrapped to two lines](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/text.svg)
 
 Output from other programs that already contains escape sequences goes
 through `fromAnsi`, which keeps colours, attributes and hyperlinks and drops
@@ -153,7 +150,7 @@ table
   ]
 ```
 
-![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](docs/images/table.svg)
+![A table of greetings in Chinese, Japanese and Russian with a purple border; the columns line up across the CJK text](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/table.svg)
 
 Cells are blocks, so they can hold lists, other tables or anything else.
 A table fits the width it is laid out in: columns shrink, wrapping their
@@ -181,7 +178,7 @@ nestedList
   [Node "Glossier" [Node "Cloud Paint" [], Node "Boy Brow" []], Node "Nyx" []]
 ```
 
-![A tree of operating systems with rounded purple branches, next to a list numbered with roman numerals and nested bullets](docs/images/outlines.svg)
+![A tree of operating systems with rounded purple branches, next to a list numbered with roman numerals and nested bullets](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/outlines.svg)
 
 The enumerators are `treeEnumerator`, `roundedTreeEnumerator`, `bullet`,
 `dash`, `asterisk`, `arabic`, `alphabet` and `roman`, or your own. Items,
@@ -195,7 +192,7 @@ Blocks can be stacked at any position, for dialogs, overlays and the like.
 
 ```haskell
 compose
-  [ layer (fg "#383838") background
+  [ layer (fg "#383838") (text (T.intercalate "\n" (replicate 6 (T.replicate 34 "╱"))))
   , layer (offset 7 2 <> zIndex 1) (render (bg "#0A0A0A" <> width 22 <> height 3) "")
   , layer
       (offset 5 1 <> zIndex 2 <> layerId "dialog")
@@ -203,7 +200,7 @@ compose
   ]
 ```
 
-![A dialog saying "Really quit?" with a drop shadow, over a hatched background](docs/images/layers.svg)
+![A dialog saying "Really quit?" with a drop shadow, over a hatched background](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/layers.svg)
 
 ## Colours
 
@@ -231,7 +228,7 @@ vcat
   ]
 ```
 
-![A purple-to-pink-to-yellow gradient, and a box with a gradient border containing darker, normal and lighter pink text](docs/images/colours.svg)
+![A purple-to-pink-to-yellow gradient, and a box with a gradient border containing darker, normal and lighter pink text](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/colours.svg)
 
 ## Output
 
@@ -331,5 +328,8 @@ The conformance test data in `test/data/GraphemeBreakTest.txt` comes from
 
 MIT, see [LICENSE](LICENSE). lipstick is a port of
 [lipgloss](https://github.com/charmbracelet/lipgloss), © Charmbracelet,
-also MIT licensed. `test/data/GraphemeBreakTest.txt` is © Unicode, Inc.,
-under the [Unicode terms of use](https://www.unicode.org/terms_of_use.html).
+also MIT licensed. The Unicode tables in
+`internal/Lipstick/Internal/UnicodeTable.hs` are generated from the Unicode
+Character Database, and `test/data/GraphemeBreakTest.txt` comes from it;
+both are © Unicode, Inc., under the Unicode License v3, see
+[LICENSE.Unicode](LICENSE.Unicode).

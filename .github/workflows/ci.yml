@@ -19,6 +19,13 @@ jobs:
         # actions/runner-images#14748). The image is also in the cache key,
         # so a cabal store built on one image is not restored on another.
         os: [ubuntu-24.04, macos-26, windows-2025]
+        ghc: ['9.12.2']
+        # The other supported compilers, on one platform.
+        include:
+          - os: ubuntu-24.04
+            ghc: '9.10.3'
+          - os: ubuntu-24.04
+            ghc: '9.14.1'
     runs-on: ${{ matrix.os }}
     steps:
       # Keep LF line endings on Windows: the tests read data files from the
@@ -32,8 +39,13 @@ jobs:
       - uses: haskell-actions/setup@v2
         id: setup
         with:
-          ghc-version: '9.12.2'
+          ghc-version: ${{ matrix.ghc }}
           cabal-version: '3.16.1.0'
+
+      - name: Check the package descriptions
+        run: |
+          cabal check
+          (cd lipstick-brick && cabal check)
 
       - name: Resolve dependencies
         run: |
@@ -43,8 +55,8 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
-          key: cabal-${{ matrix.os }}-ghc-9.12.2-${{ hashFiles('dist-newstyle/cache/plan.json') }}
-          restore-keys: cabal-${{ matrix.os }}-ghc-9.12.2-
+          key: cabal-${{ matrix.os }}-ghc-${{ matrix.ghc }}-${{ hashFiles('dist-newstyle/cache/plan.json') }}
+          restore-keys: cabal-${{ matrix.os }}-ghc-${{ matrix.ghc }}-
 
       - name: Build
         run: cabal build all --enable-tests
@@ -56,7 +68,7 @@ jobs:
       # change in rendering must come with updated images. They are
       # checked on one platform only.
       - name: Check screenshots are up to date
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.ghc == '9.12.2'
         run: |
           cabal run -v0 lipstick-screenshots -- docs/images
           if [ -n "$(git status --porcelain -- docs/images)" ]; then
