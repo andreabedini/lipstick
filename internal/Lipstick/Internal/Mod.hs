@@ -460,13 +460,14 @@ sizeMod = fieldMod . overSize
 
 -- | Total width, including padding and border, when there is room for
 -- it. Laid out in less space (a narrow terminal, a full row), the thing
--- shrinks like any other rather than overflowing.
+-- shrinks like any other rather than overflowing. A negative width counts
+-- as 0, as do negative heights and crops.
 width :: HasSize f => Int -> Mod f
-width n = sizeMod (\s -> s {sizeWidth = Just n})
+width n = sizeMod (\s -> s {sizeWidth = Just (max 0 n)})
 
 -- | Minimum total height, including padding and border.
 height :: HasSize f => Int -> Mod f
-height n = sizeMod (\s -> s {sizeHeight = Just n})
+height n = sizeMod (\s -> s {sizeHeight = Just (max 0 n)})
 
 -- | Take a share of the spare width, in proportion to the weight, when the
 -- thing is laid out next to others or on its own in the output's width.
@@ -486,12 +487,12 @@ stretchHeight = sizeMod (\s -> s {sizeStretch = True})
 -- | Crop the final result (for a style, margins included) to at most this
 -- many columns.
 maxWidth :: Int -> Mod f
-maxWidth n = propMod (\p -> p {propMaxWidth = Just n})
+maxWidth n = propMod (\p -> p {propMaxWidth = Just (max 0 n)})
 
 -- | Crop the final result (for a style, margins included) to at most this
 -- many rows.
 maxHeight :: Int -> Mod f
-maxHeight n = propMod (\p -> p {propMaxHeight = Just n})
+maxHeight n = propMod (\p -> p {propMaxHeight = Just (max 0 n)})
 
 unsetWidth, unsetHeight :: HasSize f => Mod f
 unsetWidth = sizeMod (\s -> s {sizeWidth = Nothing})
