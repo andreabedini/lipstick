@@ -701,6 +701,12 @@ renderTests =
         render (border normalBorder <> padding 0 (-1)) "hello" @?~ render (border normalBorder) "hello"
         render (border normalBorder <> margin (-1) (-2)) "hello" @?~ render (border normalBorder) "hello"
         getPadding (paddingLeft (-3)) @?= Sides 0 0 0 0
+    , testCase "negative widths and heights count as 0" $ do
+        render (width (-5)) "hello" @?~ render (width 0) "hello"
+        render (height (-5)) "hello" @?~ render (height 0) "hello"
+        render (maxWidth (-1) <> maxHeight (-1)) "hello" @?~ render (maxWidth 0 <> maxHeight 0) "hello"
+        blockWidth (frame (border normalBorder) (render (width (-5)) "a")) @?= 2
+        blockWidth (table (width (-4)) ["a", "b"] [["abc", "def"]]) @?= blockWidth (table (width 0) ["a", "b"] [["abc", "def"]])
     , testCase "inherit keeps padding" $
         plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
     ]
