@@ -64,6 +64,14 @@ jobs:
       - name: Test
         run: cabal test all --test-show-details=direct
 
+      # The >>> examples in the Haddock documentation, with the output
+      # they show. They assume OverloadedStrings, as the documentation says.
+      - name: Run the documentation examples
+        if: runner.os == 'Linux' && matrix.ghc == '9.12.2'
+        run: |
+          cabal install doctest-0.25.0.2 --ignore-project --installdir="$HOME/.local/bin" --install-method=copy --overwrite-policy=always
+          cabal repl lipstick --with-compiler="$HOME/.local/bin/doctest" --repl-options=-XOverloadedStrings
+
       # The README screenshots are drawn from examples/Screenshots.hs; any
       # change in rendering must come with updated images. They are
       # checked on one platform only.
