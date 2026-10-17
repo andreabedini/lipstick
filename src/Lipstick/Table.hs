@@ -104,6 +104,7 @@ module Lipstick.Table
   , visibleRows
   ) where
 
+import Data.Array (Array, listArray, (!))
 import Data.List (intercalate, transpose)
 import Data.Maybe (isJust)
 import Data.Text qualified as T
@@ -329,18 +330,24 @@ tableLayout ctx m headers rows
 
         -- Which body rows to show.
         rr = if tableRowRules t then 1 else 0
-        heights = map length bodyLines
+        -- Lines taken by rows before each row, and by the overflow row in
+        -- place of each row (made when first needed, then kept).
+        before = listArray (0, nBody) (scanl (+) 0 (map length bodyLines)) :: Array Int Int
+        overflowH = listArray (0, nBody) [length (overflowRow i) | i <- [0 .. nBody]] :: Array Int Int
         -- Lines taken by rows f..l, plus an overflow row if rows remain.
         linesFor f l =
-          sum (take (l - f + 1) (drop f heights))
+          before ! (l + 1) - before ! f
             + rr * max 0 (l - f)
-            + (if l < nBody - 1 then (if l >= f then rr else 0) + length (overflowRow (l + 1)) else 0)
+            + (if l < nBody - 1 then (if l >= f then rr else 0) + overflowH ! (l + 1) else 0)
         (firstV, lastV) = case hgt of
           Nothing -> (0, nBody - 1)
           Just h ->
             let avail = h - length topLines - length headerLines - length headerRuleLines - length bottomLines
                 f0 = max 0 (min (nBody - 1) (tableYOffset t))
-                l0 = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= avail) [f0 .. nBody - 1])
+                l0
+                  -- All the rows from f0 fit: no overflow row is needed.
+                  | linesFor f0 (nBody - 1) <= avail = nBody - 1
+                  | otherwise = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= avail) [f0 .. nBody - 1])
                 f1 =
                   if l0 == nBody - 1
                     then last (f0 : takeWhile (\f -> linesFor f l0 <= avail) [f0 - 1, f0 - 2 .. 0])
