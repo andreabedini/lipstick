@@ -44,7 +44,7 @@
 -- >>> ansiWidth "\ESC[1;32mok\ESC[0m 3 tests passed"
 -- 17
 module Lipstick.Ansi
-  ( RenderEnv (..)
+  ( RenderEnv (envProfile, envDarkBackground, envWidth)
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines
@@ -62,6 +62,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Word (Word8)
 import Lipstick.Color
+import Lipstick.Internal.Color (Color (..))
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Block, layout)
 import Lipstick.Internal.Types

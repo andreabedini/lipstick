@@ -10,11 +10,11 @@
 -- functions and names below:
 --
 -- >>> ["#7D56F4", "#fa0", "201", "5"] :: [Color]
--- [RGB 125 86 244,RGB 255 170 0,Color256 201,Color16 5]
+-- [rgb 125 86 244,rgb 255 170 0,ansi256 201,ansi 5]
 -- >>> (rgb 125 86 244, ansi256 201, brightBlue)
--- (RGB 125 86 244,Color256 201,Color16 12)
+-- (rgb 125 86 244,ansi256 201,ansi 12)
 -- >>> hex "7D56F4"
--- Just (RGB 125 86 244)
+-- Just (rgb 125 86 244)
 -- >>> hex "nope"
 -- Nothing
 --
@@ -38,18 +38,18 @@
 -- Gradients and adjustments:
 --
 -- >>> blend 3 ["#ff0000", "#0000ff"]
--- [RGB 255 0 0,RGB 140 83 162,RGB 0 0 255]
+-- [rgb 255 0 0,rgb 140 83 162,rgb 0 0 255]
 -- >>> mix 0.25 black white
--- RGB 29 29 29
+-- rgb 29 29 29
 -- >>> darken 0.5 "#7D56F4"
--- RGB 44 28 94
+-- rgb 44 28 94
 -- >>> lighten 0.5 "#7D56F4"
--- RGB 184 175 255
+-- rgb 184 175 255
 -- >>> complementary "#7D56F4"
--- RGB 138 128 0
+-- rgb 138 128 0
 module Lipstick.Color
   ( -- * Colours
-    Color (..)
+    Color
   , rgb
   , ansi
   , ansi256

@@ -35,7 +35,7 @@ module Lipstick.Grid
   , lineWidth
   , lineCells
   , lineSpans
-  , Span (..)
+  , Span (spanAttrs, spanText, spanWidth)
 
     -- * Cells
   , Cell

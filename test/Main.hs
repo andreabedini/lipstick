@@ -8,6 +8,7 @@ import Data.Text qualified as T
 import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Lipstick.Grid (Span (..), gridLines, lineSpans, lineWidth)
+import Lipstick.Internal.Color (Color (..))
 import Lipstick.Internal.Layout (Assign (..), Measured (..), Request (..), allocate, allocateWithin, measure)
 import Lipstick.Terminal (backgroundFromEnv, profileFromEnv, widthFromEnv)
 import Lipstick.Width (clusters)
@@ -54,6 +55,13 @@ plainLines :: Block -> [Text]
 plainLines = T.lines . renderPlain
 
 -- | Blocks are equal when they lay out the same at their natural width.
+-- | An environment, field by field.
+renderEnv :: ColorProfile -> Bool -> Maybe Int -> RenderEnv
+renderEnv p dark w = defaultRenderEnv {envProfile = p, envDarkBackground = dark, envWidth = w}
+
+rectOf :: Rect -> (Int, Int, Int, Int)
+rectOf r = (rectX r, rectY r, rectWidth r, rectHeight r)
+
 (@?~) :: Block -> Block -> Assertion
 a @?~ b = layout Nothing a @?= layout Nothing b
 
@@ -61,7 +69,7 @@ infix 1 @?~
 
 -- | The plain lines of a block laid out in a width.
 plainLinesAt :: Int -> Block -> [Text]
-plainLinesAt w = T.lines . toAnsi (RenderEnv NoTTY True (Just w))
+plainLinesAt w = T.lines . toAnsi (renderEnv NoTTY True (Just w))
 
 widthTests :: TestTree
 widthTests =
@@ -141,6 +149,10 @@ colorTests =
     , testCase "short hex" $ hex "#f80" @?= Just (RGB 255 136 0)
     , testCase "palette literal" $ ("201" :: Color) @?= Color256 201
     , testCase "basic literal" $ ("5" :: Color) @?= Color16 5
+    , testCase "colours show as the functions that make them" $ do
+        show ("#7D56F4" :: Color) @?= "rgb 125 86 244"
+        show (lightDark red (ansi256 200)) @?= "lightDark (ansi 1) (ansi256 200)"
+        show (complete "#000" "16" "0") @?= "complete (rgb 0 0 0) (ansi256 16) (ansi 0)"
     , testCase "invalid hex" $ hex "#ggg" @?= Nothing
     , testCase "red to 256" $ resolveColor ANSI256 True "#ff0000" @?= Just (TC256 196)
     , testCase "grey to 256" $ resolveColor ANSI256 True "#808080" @?= Just (TC256 244)
@@ -416,9 +428,9 @@ layerTests =
         plainLines (overlay 0 0 "a\x200B\&b" "....") @?= ["ab.."]
     , testCase "layerHit and findLayer report bounds" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 0 <> sublayers [layer (offset 1 1 <> layerId "btn") "ok"]) "x"]
-        layerHit Nothing 2 1 ls @?= Just ("btn", Rect 2 1 2 1)
-        layerHit Nothing 0 1 ls @?= Just ("bg", Rect 0 0 4 2)
-        findLayer Nothing "btn" ls @?= Just (Rect 2 1 2 1)
+        fmap rectOf <$> layerHit Nothing 2 1 ls @?= Just ("btn", (2, 1, 2, 1))
+        fmap rectOf <$> layerHit Nothing 0 1 ls @?= Just ("bg", (0, 0, 4, 2))
+        rectOf <$> findLayer Nothing "btn" ls @?= Just (2, 1, 2, 1)
         findLayer Nothing "nope" ls @?= Nothing
     , testCase "layerAt finds the topmost named layer" $ do
         let ls = [layer (layerId "bg") (text "....\n...."), layer (offset 1 1 <> layerId "btn") "ok", layer (offset 0 0) "x"]
@@ -650,7 +662,7 @@ outlineParityTests =
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;31m    \ESC[0mb"
     , testCase "enumerators and indenters see the item's position" $ do
-        let lastOnly = Enumerator (\p -> if isLast p then "> " else "- ") (const Nothing)
+        let lastOnly = markers (\p -> if isLast p then "> " else "- ")
         plainLines (list (enumerator lastOnly) ["a", "b", "c"]) @?= ["- a", "- b", "> c"]
         plainLines (forest (indenter (\p -> T.pack (show (itemDepth p)) <> "   ")) [Node "a\nb" [Node "c" []]])
           @?= ["└── a    ", "0   b    ", "0   └── c"]
@@ -762,16 +774,16 @@ ansiTests =
         toAnsi defaultRenderEnv (render (bold <> fg "#ff0000") "hi")
           @?= "\ESC[0;1;38;2;255;0;0mhi\ESC[0m"
     , testCase "downsampled to 256" $
-        toAnsi (RenderEnv ANSI256 True Nothing) (render (fg "#ff0000") "hi")
+        toAnsi (renderEnv ANSI256 True Nothing) (render (fg "#ff0000") "hi")
           @?= "\ESC[0;38;5;196mhi\ESC[0m"
     , testCase "basic colours" $
-        toAnsi (RenderEnv ANSI16 True Nothing) (render (fg red <> bg brightBlue) "hi")
+        toAnsi (renderEnv ANSI16 True Nothing) (render (fg red <> bg brightBlue) "hi")
           @?= "\ESC[0;31;104mhi\ESC[0m"
     , testCase "ascii keeps attributes, drops colours" $
-        toAnsi (RenderEnv Ascii True Nothing) (render (bold <> fg red) "hi")
+        toAnsi (renderEnv Ascii True Nothing) (render (bold <> fg red) "hi")
           @?= "\ESC[0;1mhi\ESC[0m"
     , testCase "NoTTY is plain" $
-        toAnsi (RenderEnv NoTTY True Nothing) (render (bold <> fg red <> link "x") "hi") @?= "hi"
+        toAnsi (renderEnv NoTTY True Nothing) (render (bold <> fg red <> link "x") "hi") @?= "hi"
     , testCase "nested style keeps outer background" $
         toAnsi defaultRenderEnv (render (bg "1") (styled bold "a" <> "b"))
           @?= "\ESC[0;1;41ma\ESC[0;41mb\ESC[0m"
@@ -779,7 +791,7 @@ ansiTests =
         toAnsi defaultRenderEnv (render (underline <> bg "1" <> paddingLeft 1) "a")
           @?= "\ESC[0;41m \ESC[0;4;41ma\ESC[0m"
     , testCase "curly underline downgraded below true colour" $
-        toAnsi (RenderEnv ANSI256 True Nothing) (render (underlineStyle CurlyUnderline) "a")
+        toAnsi (renderEnv ANSI256 True Nothing) (render (underlineStyle CurlyUnderline) "a")
           @?= "\ESC[0;4ma\ESC[0m"
     , testCase "hyperlink" $
         toAnsi defaultRenderEnv (render (link "https://x.y") "a")
@@ -800,15 +812,15 @@ ansiTests =
         (path, h) <- openTempFile dir "lipstick.txt"
         hSetEncoding h =<< mkTextEncoding "ASCII"
         let b = render (border roundedBorder) "héllo"
-        hPutBlockWith (RenderEnv NoTTY True Nothing) h b
+        hPutBlockWith (renderEnv NoTTY True Nothing) h b
         hClose h
         out <- Utf8.readFile path
         removeFile path
         out @?= renderPlain b <> "\n"
     , testCase "light/dark resolved at output" $ do
         let b = render (fg (lightDark "1" "2")) "a"
-        toAnsi (RenderEnv TrueColor True Nothing) b @?= "\ESC[0;32ma\ESC[0m"
-        toAnsi (RenderEnv TrueColor False Nothing) b @?= "\ESC[0;31ma\ESC[0m"
+        toAnsi (renderEnv TrueColor True Nothing) b @?= "\ESC[0;32ma\ESC[0m"
+        toAnsi (renderEnv TrueColor False Nothing) b @?= "\ESC[0;31ma\ESC[0m"
     ]
 
 profileTests :: TestTree
@@ -1135,7 +1147,7 @@ deferredLayoutTests =
     , testCase "a layer reflows in a narrow canvas" $ do
         let ls = [layer mempty (text "aaaa bbbb"), layer (offset 2 0 <> layerId "top") "x"]
         plainLinesAt 6 (compose ls) @?= ["aaxa  ", "bbbb  "]
-        findLayer (Just 6) "top" ls @?= Just (Rect 2 0 1 1)
+        rectOf <$> findLayer (Just 6) "top" ls @?= Just (2, 0, 1, 1)
     , testCase "a column aligns blocks that do not grow" $
         plainLinesAt 8 (joinVertical right [render fillWidth "abc", "d"])
           @?= ["abc     ", "       d"]
