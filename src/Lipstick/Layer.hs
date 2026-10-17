@@ -76,6 +76,9 @@ import Lipstick.Internal.Mod (Mod, Props (..), defProps, fieldMod, runMod, withP
 -- $setup
 -- >>> import Lipstick
 
+-- | A block to draw on a canvas, with its position, z-index, name and
+-- sublayers. Make one with 'layer', set those with a @t'Mod' t'Layer'@
+-- ('offset', 'zIndex', …), and draw layers with 'compose'.
 data Layer = Layer
   { layerX :: !Int
   , layerY :: !Int

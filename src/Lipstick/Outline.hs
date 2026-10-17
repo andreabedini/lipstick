@@ -143,6 +143,10 @@ data ItemPos = ItemPos
   }
   deriving (Eq, Show)
 
+-- | The settings of a list or tree: its enumerator and indenter, the
+-- styles of the root, items, enumerators and indentation, its size, and
+-- the items it shows. Change them with the @t'Mod' t'Outline'@ passed to
+-- 'tree', 'forest', 'list' or 'nestedList'.
 data Outline = Outline
   { outEnumerator :: Enumerator
   , outIndenter :: Maybe (ItemPos -> Text)

@@ -58,6 +58,8 @@ module Lipstick.Color
   , complete
 
     -- ** The 16 basic colours
+    -- | What they look like is up to the terminal's palette. Where they
+    -- are turned into RGB, xterm's palette is used.
   , black, red, green, yellow, blue, magenta, cyan, white
   , brightBlack, brightRed, brightGreen, brightYellow
   , brightBlue, brightMagenta, brightCyan, brightWhite
