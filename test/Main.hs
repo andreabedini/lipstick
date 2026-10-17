@@ -599,27 +599,27 @@ tableParityTests :: TestTree
 tableParityTests =
   testGroup
     "table parity"
-    [ testCase "height shows an overflow row" $
-        plainLines (table (height 7) ["N", "What"] numbered)
+    [ testCase "maxHeight shows an overflow row" $
+        plainLines (table (maxHeight 7) ["N", "What"] numbered)
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "│1│row │", "│…│…   │", "╰─┴────╯"]
     , testCase "yOffset scrolls" $ do
-        take 2 (drop 3 (plainLines (table (height 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
-        visibleRows Nothing (height 7 <> yOffset 4) ["N", "What"] numbered @?= Just (4, 5)
+        take 2 (drop 3 (plainLines (table (maxHeight 7 <> yOffset 4) ["N", "What"] numbered))) @?= ["│4│row │", "│5│row │"]
+        visibleRows Nothing (maxHeight 7 <> yOffset 4) ["N", "What"] numbered @?= Just (4, 5)
     , testCase "scrolled to the end, earlier rows fill the space" $ do
-        visibleRows Nothing (height 7 <> yOffset 9) ["N", "What"] numbered @?= Just (7, 9)
-        visibleRows Nothing (height 7 <> yOffset 99) ["N", "What"] numbered @?= Just (7, 9)
-    , testCase "all rows without a height" $
+        visibleRows Nothing (maxHeight 7 <> yOffset 9) ["N", "What"] numbered @?= Just (7, 9)
+        visibleRows Nothing (maxHeight 7 <> yOffset 99) ["N", "What"] numbered @?= Just (7, 9)
+    , testCase "all rows without a maxHeight" $
         visibleRows Nothing mempty ["N"] numbered @?= Just (0, 9)
     , testCase "an empty table shows no rows" $
         visibleRows Nothing mempty ["N"] [] @?= Nothing
-    , testCase "row rules count towards the height" $
-        plainLines (table (height 8 <> rowRules True <> border asciiBorder) [] numbered)
+    , testCase "row rules count towards the maxHeight" $
+        plainLines (table (maxHeight 8 <> rowRules True <> border asciiBorder) [] numbered)
           -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
           -- a third row would need 7.
           @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
     , testCase "too small for any row" $ do
-        visibleRows Nothing (height 3) ["N"] numbered @?= Nothing
-        blockHeight (table (height 3) ["N"] numbered) @?= 3
+        visibleRows Nothing (maxHeight 3) ["N"] numbered @?= Nothing
+        blockHeight (table (maxHeight 3) ["N"] numbered) @?= 3
     , testCase "fitContent does not stretch" $
         plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "╰─┴────╯"]
@@ -628,8 +628,13 @@ tableParityTests =
     , testCase "headers are cut, not wrapped" $
         plainLines (table (width 8) ["Header text", "H"] [["a", "b"]])
           @?= ["╭────┬─╮", "│Hea…│H│", "├────┼─┤", "│a   │b│", "╰────┴─╯"]
-    , testProperty "a table never exceeds its height" $ \(Positive h) (TableData hs rs) ->
-        blockHeight (table (height h) (map fromInline hs) (map (map fromInline) rs)) <= h
+    , testCase "height is a minimum, filled with empty rows" $
+        plainLines (table (height 6) ["N"] [["0"]]) @?= ["╭─╮", "│N│", "├─┤", "│0│", "│ │", "╰─╯"]
+    , testCase "height and maxHeight together fix the height" $ do
+        blockHeight (table (height 7 <> maxHeight 7) ["N", "What"] numbered) @?= 7
+        blockHeight (table (height 7 <> maxHeight 7) ["N", "What"] (take 1 numbered)) @?= 7
+    , testProperty "a table never exceeds its maxHeight" $ \(Positive h) (TableData hs rs) ->
+        blockHeight (table (maxHeight h) (map fromInline hs) (map (map fromInline) rs)) <= h
     ]
   where
     numbered = [[text (T.pack (show i)), "row"] | i <- [0 .. 9 :: Int]]
@@ -1074,6 +1079,14 @@ deferredLayoutTests =
         plainLinesAt 5 (place (align center) "x") @?= ["  x  "]
     , testCase "place keeps its natural width when there is no limit" $
         plainLines (place (align center) "x") @?= ["x"]
+    , testCase "a place's width is its width, as a style's" $ do
+        plainLines (place (width 5) "hello world") @?= ["hello", "world"]
+        blockWidth (place (width 5) "hi") @?= 5
+        plainLinesAt 3 (place (width 5) "hi") @?= ["hi "]
+    , testCase "an outline's width is its width, as a style's" $ do
+        plainLines (list (width 8) ["one two three"]) @?= ["• one   ", "  two   ", "  three "]
+        blockWidth (list (width 8) ["a"]) @?= 8
+        gridWidth (layout (Just 4) (list (width 8) ["a b"])) @?= 4
     , testCase "a table fits the width it is given, wrapping its cells" $
         -- Even the longest words (8 and 9) do not fit side by side in 14
         -- columns, so the columns shrink widest first below them.
@@ -1109,8 +1122,8 @@ deferredLayoutTests =
           @?= ["╭─────┬─────╮", "│a    │b    │", "├─────┼─────┤", "│1    │2    │", "╰─────┴─────╯"]
     , testCase "which rows a table shows depends on its width" $ do
         let rows = [[text (T.pack (show i)), "a few words"] | i <- [0 .. 9 :: Int]]
-        visibleRows Nothing (height 8) ["N", "What"] rows @?= Just (0, 2)
-        visibleRows (Just 9) (height 8) ["N", "What"] rows @?= Just (0, 0)
+        visibleRows Nothing (maxHeight 8) ["N", "What"] rows @?= Just (0, 2)
+        visibleRows (Just 9) (maxHeight 8) ["N", "What"] rows @?= Just (0, 0)
     , testCase "list items wrap after their enumerator" $
         plainLinesAt 10 (list mempty ["one two three", "four"])
           @?= ["• one two ", "  three   ", "• four    "]

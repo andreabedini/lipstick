@@ -62,11 +62,11 @@
 -- │        │те        │      │
 -- ╰────────┴──────────┴──────╯
 --
--- With a 'height', rows that do not fit are replaced by a row of
+-- With a 'maxHeight', rows that do not fit are replaced by a row of
 -- ellipses, and 'yOffset' scrolls:
 --
 -- >>> let numbers = [[text (T.pack (show n)), text (T.pack (show (n * n)))] | n <- [1 .. 20 :: Int]]
--- >>> putBlock (table (height 8 <> yOffset 5) ["n", "n²"] numbers)
+-- >>> putBlock (table (maxHeight 8 <> yOffset 5) ["n", "n²"] numbers)
 -- ╭──┬───╮
 -- │n │n² │
 -- ├──┼───┤
@@ -75,7 +75,7 @@
 -- │8 │64 │
 -- │… │…  │
 -- ╰──┴───╯
--- >>> visibleRows Nothing (height 8 <> yOffset 5) ["n", "n²"] numbers
+-- >>> visibleRows Nothing (maxHeight 8 <> yOffset 5) ["n", "n²"] numbers
 -- Just (5,7)
 --
 -- Cells are blocks, so they can hold anything:
@@ -153,9 +153,13 @@ instance HasBorder Table where
 -- (wrapping their text) when the table is laid out in less space: widest
 -- first, but not below their longest word while another column can still
 -- wrap; with 'fillWidth', they grow to fill it. 'width' is the total width
--- of the table: columns shrink or grow to fit it. 'height' is the most lines the table takes: body
--- rows that do not fit are replaced by a row of ellipses, starting from
--- the row set by 'yOffset'.
+-- of the table: columns shrink or grow to fit it. 'height' is the least
+-- number of lines the table takes: rows of empty cells are added after the
+-- body to reach it.
+--
+-- 'maxHeight' is the most lines the table takes: rather than being cut
+-- off, body rows that do not fit are replaced by a row of ellipses,
+-- starting from the row set by 'yOffset'.
 instance HasSize Table where
   overSize f t = t {tableSize = f (tableSize t)}
 
@@ -201,8 +205,8 @@ columnRules v = fieldMod (\t -> t {tableColumnRules = v})
 rowRules :: Bool -> Mod Table
 rowRules v = fieldMod (\t -> t {tableRowRules = v})
 
--- | The first body row shown when the table has a 'height' (default 0).
--- When the rows from there on do not fill the height, earlier rows are
+-- | The first body row shown when the table has a 'maxHeight' (default
+-- 0). When the rows from there on do not fill the height, earlier rows are
 -- shown too.
 yOffset :: Int -> Mod Table
 yOffset n = fieldMod (\t -> t {tableYOffset = max 0 n})
@@ -222,7 +226,8 @@ table m headers rows = Block $ \ctx ->
 
 -- | The first and last body rows a table shows, laid out in an available
 -- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout';
--- 'Nothing' when it shows none. All rows unless the table has a 'height'.
+-- 'Nothing' when it shows none. All rows unless the table has a
+-- 'maxHeight'.
 visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> Maybe (Int, Int)
 visibleRows avail m headers rows = snd (run (maybe (reqMax req) (takenWidth req) avail))
   where
@@ -241,7 +246,9 @@ tableLayout ctx m headers rows
     sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
     -- Outer edges take their side's colours; inner rules take the top's.
     ba = sideAttrs sideTop
-    Size wSet hgt weight _ = tableSize t
+    Size wSet hMin weight _ = tableSize t
+    -- At most this many lines: body rows that do not fit are left out.
+    hgt = propMaxHeight props
 
     ncols = maximum (0 : length headers : map length rows)
     padRow r = take ncols (r ++ repeat (textBlock mempty))
@@ -343,4 +350,8 @@ tableLayout ctx m headers rows
         shown = take (lastV - firstV + 1) (drop firstV bodyLines)
         overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
         body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
-        allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ bottomLines
+        -- Up to the minimum height, lines of empty cells after the body.
+        drawn = length topLines + length headerLines + length headerRuleLines + length body + length bottomLines
+        emptyLine = take 1 (renderRow (cellNodes (BodyCell nBody, replicate ncols (textBlock mempty))))
+        filler = concat (replicate (maybe 0 (subtract drawn) hMin) emptyLine)
+        allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ filler ++ bottomLines

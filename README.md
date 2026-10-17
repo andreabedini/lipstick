@@ -64,9 +64,13 @@ Other modifiers apply to the things that have the corresponding part:
 styles, tables, lists, trees and placed blocks, `align` to styles and placed
 blocks. A modifier on something that does not support it is a type error.
 
-`width` and `height` include padding and border but not margins, as in
-lipgloss. With a width, text is word-wrapped to fit, or cut with an ellipsis
-with `noWrap`.
+The sizes mean the same for everything that has them. `width n` is the
+width when there is room for it: the content is laid out in `n` columns,
+and with less room the thing shrinks like any other. `height n` is the
+least number of lines. `maxWidth` and `maxHeight` are the most, and crop
+what does not fit. For a style, `width` and `height` include padding and
+border but not margins, as in lipgloss. With a width, text is word-wrapped
+to fit, or cut with an ellipsis with `noWrap`.
 
 ## Blocks and layout
 
@@ -156,11 +160,10 @@ Cells are blocks, so they can hold lists, other tables or anything else.
 A table fits the width it is laid out in: columns shrink, wrapping their
 cells, widest first but without breaking a word while another column can
 still wrap (headers are cut short instead), and with `fillWidth` they grow
-to fill it. With a
-`width`, columns shrink or grow to fit that instead; `fitContent` makes the
-width a maximum. With a `height`, rows that
-do not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
-which rows are shown. `headerRule`, `columnRules`, `rowRules` and the
+to fill it. With a `width`, columns shrink or grow to fit that instead;
+`fitContent` makes the width a maximum. With a `maxHeight`, rows that do
+not fit become a row of `…`, `yOffset` scrolls, and `visibleRows` tells
+which rows are shown; a `height` adds empty rows up to it. `headerRule`, `columnRules`, `rowRules` and the
 `border*` modifiers choose which lines are drawn.
 
 ## Lists and trees

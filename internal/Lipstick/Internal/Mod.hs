@@ -465,7 +465,8 @@ sizeMod = fieldMod . overSize
 width :: HasSize f => Int -> Mod f
 width n = sizeMod (\s -> s {sizeWidth = Just (max 0 n)})
 
--- | Minimum total height, including padding and border.
+-- | Minimum total height, including padding and border: the thing is at
+-- least this many lines tall.
 height :: HasSize f => Int -> Mod f
 height n = sizeMod (\s -> s {sizeHeight = Just (max 0 n)})
 
@@ -490,7 +491,8 @@ maxWidth :: Int -> Mod f
 maxWidth n = propMod (\p -> p {propMaxWidth = Just (max 0 n)})
 
 -- | Crop the final result (for a style, margins included) to at most this
--- many rows.
+-- many rows. A table leaves out the body rows that do not fit instead (see
+-- 'Lipstick.Table.yOffset').
 maxHeight :: Int -> Mod f
 maxHeight n = propMod (\p -> p {propMaxHeight = Just (max 0 n)})
 
