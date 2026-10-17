@@ -42,8 +42,8 @@ main =
           blockImage defaultRenderEnv (render (fg "200") "a") @?= V.text' (V.defAttr `V.withForeColor` V.Color240 184) "a"
       , testCase "light and dark backgrounds" $ do
           let b = render (fg (lightDark "1" "2")) "a"
-          blockImage (RenderEnv TrueColor False Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 1) "a"
-          blockImage (RenderEnv TrueColor True Nothing) b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 2) "a"
+          blockImage defaultRenderEnv {envDarkBackground = False} b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 1) "a"
+          blockImage defaultRenderEnv b @?= V.text' (V.defAttr `V.withForeColor` V.ISOColor 2) "a"
       , testCase "a block that grows is a greedy widget" $ do
           hSize (blockWidget defaultRenderEnv (render fillWidth "x") :: Widget ()) @?= Greedy
           hSize (blockWidget defaultRenderEnv (render mempty "x") :: Widget ()) @?= Fixed

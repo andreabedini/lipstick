@@ -113,7 +113,7 @@ module Lipstick
   , escapeUri
   , styleRanges
   , styleIndices
-  , Attrs (..)
+  , Attrs (attrFg, attrBg, attrUnderlineColor, attrBold, attrFaint, attrItalic, attrBlink, attrReverse, attrStrikethrough, attrUnderline, attrLink)
 
     -- * Layout
     -- | Blocks side by side, stacked, or placed in a larger area. See
@@ -214,7 +214,7 @@ module Lipstick
     -- >>> putBlock (render (border roundedBorder <> borderBottom False) "open below")
     -- ╭──────────╮
     -- │open below│
-  , Border (..)
+  , Border (topEdge, bottomEdge, leftEdge, rightEdge, topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner, middleLeft, middleRight, middle, middleTop, middleBottom)
   , border
   , borderFg
   , borderBg
@@ -347,7 +347,7 @@ module Lipstick
   , nestedList
   , Tree (..)
   , Forest
-  , ItemPos (..)
+  , ItemPos (itemDepth, itemIndex, itemSiblings)
   , rootStyle
   , itemStyle
   , itemStyleWith
@@ -356,7 +356,8 @@ module Lipstick
   , indenterStyle
   , indenterStyleWith
   , itemOffset
-  , Enumerator (..)
+  , Enumerator (enumMarker, enumIndent)
+  , markers
   , enumerator
   , byDepth
   , isLast
@@ -374,7 +375,7 @@ module Lipstick
     -- | See "Lipstick.Color".
     --
     -- >>> blend 3 ["#ff0000", "#0000ff"]
-    -- [RGB 255 0 0,RGB 140 83 162,RGB 0 0 255]
+    -- [rgb 255 0 0,rgb 140 83 162,rgb 0 0 255]
     -- >>> resolveColor TrueColor True (lightDark "#5A3FC0" "#B39DFF")
     -- Just (TCRGB 179 157 255)
   , module Lipstick.Color
@@ -388,7 +389,7 @@ module Lipstick
     -- "\ESC[0;35mpink\ESC[0m"
     -- >>> renderPlain (render (fg "#F25D94") "pink")
     -- "pink"
-  , RenderEnv (..)
+  , RenderEnv (envProfile, envDarkBackground, envWidth)
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines
@@ -424,7 +425,7 @@ module Lipstick
   , layerAt
   , layerHit
   , findLayer
-  , Rect (..)
+  , Rect (rectX, rectY, rectWidth, rectHeight)
 
     -- * Measuring text
     -- | Display widths. See "Lipstick.Width".

@@ -58,7 +58,18 @@ data Color
     LightDark Color Color
   | -- | Explicit choices for true-colour, 256-colour and 16-colour terminals.
     Complete Color Color Color
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+-- | Shown as the functions that make it, since the constructors are not
+-- exported: @rgb 125 86 244@, @ansi256 201@, @ansi 5@, @lightDark …@,
+-- @complete …@.
+instance Show Color where
+  showsPrec d c = showParen (d > 10) $ case c of
+    RGB r g b -> showString "rgb " . showsPrec 11 r . showChar ' ' . showsPrec 11 g . showChar ' ' . showsPrec 11 b
+    Color256 n -> showString "ansi256 " . showsPrec 11 n
+    Color16 n -> showString "ansi " . showsPrec 11 n
+    LightDark l k -> showString "lightDark " . showsPrec 11 l . showChar ' ' . showsPrec 11 k
+    Complete t x y -> showString "complete " . showsPrec 11 t . showChar ' ' . showsPrec 11 x . showChar ' ' . showsPrec 11 y
 
 -- | Parses @"#rgb"@, @"#rrggbb"@ or a palette index @"0"@–@"255"@.
 -- Calls 'error' on anything else; use 'hex' for a total alternative.

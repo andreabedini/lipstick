@@ -34,7 +34,7 @@
 -- ║1║2║
 -- ╚═╩═╝
 module Lipstick.Border
-  ( Border (..)
+  ( Border (topEdge, bottomEdge, leftEdge, rightEdge, topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner, middleLeft, middleRight, middle, middleTop, middleBottom)
   , normalBorder
   , roundedBorder
   , thickBorder

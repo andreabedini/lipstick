@@ -60,7 +60,7 @@ module Lipstick.Layer
   , layerAt
   , layerHit
   , findLayer
-  , Rect (..)
+  , Rect (rectX, rectY, rectWidth, rectHeight)
   ) where
 
 import Data.List (sortOn)
