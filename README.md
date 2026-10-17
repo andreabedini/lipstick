@@ -303,6 +303,14 @@ cabal test all
 cabal run lipstick-demo
 ```
 
+The examples in the Haddock documentation are run with
+[doctest](https://hackage.haskell.org/package/doctest), in CI too:
+
+```
+cabal install doctest
+cabal repl lipstick --with-compiler=doctest --repl-options=-XOverloadedStrings
+```
+
 The screenshots in this README are drawn from the examples in
 `examples/Screenshots.hs`, as SVG on the terminal's cell grid:
 
