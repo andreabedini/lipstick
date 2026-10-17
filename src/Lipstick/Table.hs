@@ -130,11 +130,15 @@ cellRow = \case
   HeaderCell _ -> Nothing
   BodyCell r _ -> Just r
 
+-- | The column of a cell, counting from 0.
 cellColumn :: TableCell -> Int
 cellColumn = \case
   HeaderCell c -> c
   BodyCell _ c -> c
 
+-- | The settings of a 'table': its border (rounded by default), the rules
+-- under the header and between columns and rows, its size, wrapping and
+-- cell styles. Change them with the @t'Mod' t'Table'@ passed to 'table'.
 data Table = Table
   { tableBorder :: !BorderProps
   , tableSize :: !Size

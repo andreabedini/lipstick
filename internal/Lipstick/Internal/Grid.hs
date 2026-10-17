@@ -48,6 +48,7 @@ import Data.Text qualified as T
 import Lipstick.Internal.Types
 import Lipstick.Internal.Width (clusters)
 
+-- | A laid-out block: a rectangle of lines, all of the same width.
 data Grid = Grid
   { gridWidth :: !Int
   , gridHeight :: !Int
@@ -55,6 +56,7 @@ data Grid = Grid
   }
   deriving (Eq, Show)
 
+-- | A line of a grid: a row of cells, one grapheme cluster each.
 data Line = Line
   { lineWidth :: !Int
   , lineCells :: ![Cell]
@@ -273,6 +275,8 @@ newtype Inline = Inline [(Attrs, Text)]
 instance IsString Inline where
   fromString = plain . T.pack
 
+-- | Text with no attributes of its own. String literals are 'plain'
+-- text.
 plain :: Text -> Inline
 plain t = Inline [(mempty, t)]
 
