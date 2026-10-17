@@ -35,6 +35,11 @@ build-depends: lipstick ^>=0.1
 For brick and vty applications, add
 [`lipstick-brick`](https://hackage.haskell.org/package/lipstick-brick) too.
 
+The examples import `Lipstick` whole. Some of its names (`bold`, `fg`,
+`border`, `center`, `text`, `render`, `width`, the colour names) are also
+exported by brick, vty, colour or prettyprinter; programs that use those
+too can `import Lipstick qualified as L`.
+
 ## Styles are modifiers
 
 A `Mod Style` is a modifier, in the same sense as optparse-applicative's
@@ -294,6 +299,34 @@ build-number check (lipstick requires a Windows that supports ANSI
 sequences anyway), and Go-specific API such as `SetString`, `Copy`,
 `WrapWriter` and the table data interfaces, which plain values and lists
 cover.
+
+## Compared with layoutz
+
+I did not know about [layoutz](https://hackage.haskell.org/package/layoutz)
+while writing lipstick, and came across it only when preparing the first
+release. It is another Haskell library for terminal output, and it does a
+lot that lipstick does not: charts (bars, sparklines, braille line and pie
+plots, heatmaps), spinners and progress bars, inline images for kitty,
+interactive prompts and a small Elm-style application runtime, all in one
+module with only boot-package dependencies. For a quick dashboard or an
+animated script, it is worth a look.
+
+The two are built differently. layoutz renders each element to a `String`
+with escape sequences in it and measures it again by stripping them;
+lipstick renders to blocks of styled cells and produces escape sequences
+only when printing. From the source of layoutz 0.4.0.0:
+
+|                        | layoutz                                                          | lipstick                                                    |
+| ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| Width of text          | a list of wide ranges: CJK lines up, emoji sequences and flags do not | Unicode grapheme clusters and East Asian Width          |
+| Colours                | foreground only, in 16, 256 or 24-bit colour                     | foreground, background and underline; light/dark and per-profile colours; gradients |
+| Terminal support       | always prints escape sequences                                   | `NO_COLOR`, `CLICOLOR_FORCE`, `COLORTERM`, `TERM`; colours reduced to what the output shows |
+| Nested styles          | an inner style ends the outer one                                | the outer style shows through                               |
+| Layout                 | as wide as the content; wrapping at a given width                | laid out in the width available: text wraps, tables shrink their columns |
+| Tables                 | columns as wide as their widest cell                             | columns that shrink and grow, styles by cell, scrolling     |
+| Placing and layers     | no                                                               | `place`, `compose`, hit testing                             |
+| Existing ANSI text, hyperlinks | no                                                       | `fromAnsi`, `link`                                          |
+| Charts, spinners, prompts, application loop | yes                                         | no; for full-screen applications, brick through lipstick-brick |
 
 ## Development
 
