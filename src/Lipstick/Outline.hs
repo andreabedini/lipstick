@@ -146,10 +146,11 @@ data Outline = Outline
   }
 
 -- | Items are laid out in the width left after their indentation and
--- enumerator, so their text wraps to fit. 'width' pads every line to at
--- least that many columns, with the background of its item's style, and
--- 'fillWidth' to the width the outline is given; 'height' pads with blank
--- lines.
+-- enumerator, so their text wraps to fit. 'width' is the width of the
+-- outline when there is room for it, as for a style: items wrap to fit it,
+-- and every line is padded to it with the background of its item's style.
+-- 'fillWidth' pads to the width the outline is given, and 'height' pads
+-- with blank lines up to that many.
 instance HasSize Outline where
   overSize f o = o {outSize = f (outSize o)}
 
@@ -213,8 +214,10 @@ outlineNode :: Outline -> Props -> [(Entry, Measured)] -> Measured
 outlineNode o props entries = Measured req run
   where
     Size wSet hSet weight _ = outSize o
-    natural = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])
-    smallest = maximum (fromMaybe 0 wSet : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])
+    -- With a width, that is the width when there is room for it, as for a
+    -- style; items wrap to fit.
+    natural = fromMaybe (maximum (0 : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])) wSet
+    smallest = fromMaybe (maximum (0 : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])) wSet
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     capH x = maybe x (min x . max 0) (propMaxHeight props)
     req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False False
