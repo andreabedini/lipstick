@@ -229,16 +229,24 @@ underlineSpaces v = fieldMod (\s -> s {styleUnderlineSpaces = Just v})
 strikethroughSpaces :: Bool -> Mod Style
 strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 
--- | Apply a parent style, keeping the padding and margins already set:
--- lipgloss's @Inherit@.
+-- | A parent style without its padding and margins, to put before a
+-- child style: in @inherit parent <> child@, the child gets the parent's
+-- settings except the padding and margins, and its own settings win, as
+-- with lipgloss's @child.Inherit(parent)@.
 --
--- >>> let parent = border roundedBorder <> padding 1 4
--- >>> putBlock (render (padding 0 1 <> inherit parent) "child")
+-- >>> let parent = border roundedBorder <> padding 1 4 <> width 20
+-- >>> putBlock (render (inherit parent <> padding 0 1 <> width 9) "child")
 -- ╭───────╮
 -- │ child │
 -- ╰───────╯
+--
+-- Settings that come after a modifier always win over it, so
+-- @child <> inherit parent@ would let the parent override the child.
 inherit :: Mod Style -> Mod Style
-inherit (Mod f g) = Mod (\s -> (f s) {styleBox = styleBox s}) g
+inherit (Mod f g) = Mod (\s -> keepSpacing s (f s)) g
+  where
+    keepSpacing s s' =
+      s' {styleBox = (styleBox s') {boxPadding = boxPadding (styleBox s), boxMargin = boxMargin (styleBox s)}}
 
 -- | Render text in a box: @frame m ('Lipstick.Block.fromInline' inl)@.
 -- The text is word-wrapped to fit inside the padding and border: of the

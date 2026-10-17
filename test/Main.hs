@@ -717,8 +717,15 @@ renderTests =
         render (maxWidth (-1) <> maxHeight (-1)) "hello" @?~ render (maxWidth 0 <> maxHeight 0) "hello"
         blockWidth (frame (border normalBorder) (render (width (-5)) "a")) @?= 2
         blockWidth (table (width (-4)) ["a", "b"] [["abc", "def"]]) @?= blockWidth (table (width 0) ["a", "b"] [["abc", "def"]])
-    , testCase "inherit keeps padding" $
-        plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> bold)) "x") @?= [" x"]
+    , testCase "inherit leaves out padding and margins" $
+        plainLines (render (paddingLeft 1 <> inherit (paddingLeft 5 <> marginLeft 3 <> bold)) "x") @?= [" x"]
+    , testCase "settings after inherit win" $ do
+        let parent = fg "4" <> width 20 <> border doubleBorder <> paddingLeft 5
+            s = inherit parent <> fg "1" <> width 10
+        (attrFg (getAttrs s), getWidth s, getBorder s == Just doubleBorder, getPadding s)
+          @?= (Just "1", Just 10, True, Sides 0 0 0 0)
+    , testCase "inherit keeps the margin colour" $
+        getMarginBg (inherit (marginBg "4" <> marginLeft 2)) @?= Just "4"
     ]
 
 layoutTests :: TestTree
