@@ -685,6 +685,11 @@ outlineParityTests =
     [ testCase "custom indenter" $
         plainLines (forest (indenter (const ":   ")) [Node "a\nb" [Node "c" []]])
           @?= ["└── a    ", ":   b    ", ":   └── c"]
+    , testCase "an indenter wider than the enumerator widens it" $ do
+        plainLines (list (indenter (const ">>>>>>")) ["one\ntwo", "three"])
+          @?= ["•     one  ", ">>>>>>two  ", "•     three"]
+        plainLines (forest (indenter (const "::::::")) [Node "a" [Node "b\nc" []]])
+          @?= ["└──   a      ", "::::::└──   b", "::::::::::::c"]
     , testCase "indentation uses the enumerator style by default" $
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;31m    \ESC[0mb"
