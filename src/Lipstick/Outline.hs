@@ -274,8 +274,11 @@ items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markerCells kids)
     item i mk (Node b children) =
       let -- Alignment space keeps the enumerator's background, as lipgloss.
           marker = alignCells (fillOf (enumStyle i)) right markerW mk
+          -- Without indentation text, spaces that make the indentation as
+          -- wide as the enumerator once the style adds its padding and margins.
+          frameW = cellsWidth (styledLine (indentStyle i) "")
           indentText =
-            fromMaybe (T.replicate markerW " ") (fmap ($ pos i) (outIndenter o) <|> enumIndent e (pos i))
+            fromMaybe (T.replicate (markerW - frameW) " ") (fmap ($ pos i) (outIndenter o) <|> enumIndent e (pos i))
           indent = alignCells (fillOf (indentStyle i)) left markerW (styledLine (indentStyle i) indentText)
           itemStyle' = outItemStyle o (pos i)
        in Entry outer marker indent (fillOf itemStyle') (frame itemStyle' b)
