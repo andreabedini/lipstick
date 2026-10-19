@@ -82,7 +82,13 @@ widthTests =
     , testCase "ZWJ sequence is one cluster" $ textWidth "👩\x200D💻" @?= 2
     , testCase "flag is one cluster" $ textWidth "🇮🇹" @?= 2
     , testCase "VS16 makes text emoji wide" $ textWidth "❤\xFE0F" @?= 2
-    , testCase "VS15 makes emoji narrow" $ textWidth "⌚\xFE0E" @?= 1
+    , testCase "VS15 does not change the width" $ do
+        textWidth "⌚\xFE0E" @?= 2
+        textWidth "😀\xFE0E" @?= 2
+        textWidth "\x2764\xFE0E" @?= 1
+    , testCase "skin tone modifiers are wide and make an emoji wide" $ do
+        map textWidth ["\x261D\x1F3FB", "\x270C\x1F3FD", "👍\x1F3FB", "\x1F3FB", "\x1F3FB\x1F3FF"] @?= [2, 2, 2, 2, 2]
+        blockWidth (render (border normalBorder) "\x1F3FBx") @?= 5
     , testCase "keycap" $ textWidth "1\xFE0F\x20E3" @?= 2
     , testCase "skin tone modifier" $ textWidth "👍🏽" @?= 2
     , testCase "family ZWJ sequence" $ textWidth "👨\x200D👩\x200D👧" @?= 2
