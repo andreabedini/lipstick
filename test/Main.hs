@@ -679,6 +679,12 @@ outlineParityTests =
         plainLines (list (enumerator lastOnly) ["a", "b", "c"]) @?= ["- a", "- b", "> c"]
         plainLines (forest (indenter (\p -> T.pack (show (itemDepth p)) <> "   ")) [Node "a\nb" [Node "c" []]])
           @?= ["└── a    ", "0   b    ", "0   └── c"]
+    , testCase "default indentation is as wide as a padded enumerator" $ do
+        plainLines (nestedList (enumeratorStyle (paddingRight 1)) [Node "first\nsecond" [Node "child" []], Node "c" []])
+          @?= ["•  first   ", "   second  ", "   •  child", "•  c       "]
+        plainLines (list (enumeratorStyle (marginRight 2)) ["a\nb"]) @?= ["•   a", "    b"]
+        plainLines (list (enumeratorStyle (paddingLeft 1) <> indenterStyle (paddingRight 2)) ["a\nb"])
+          @?= [" • a", "   b"]
     , testCase "indenter style replaces it" $
         toAnsi defaultRenderEnv (forest (enumeratorStyle (fg red) <> indenterStyle (fg blue)) [Node "a\nb" []])
           @?= "\ESC[0;31m└── \ESC[0ma\n\ESC[0;34m    \ESC[0mb"
