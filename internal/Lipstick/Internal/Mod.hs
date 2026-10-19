@@ -53,6 +53,7 @@ module Lipstick.Internal.Mod
   , defBorderProps
   , Edges (..)
   , borderEdges
+  , blendBorder
   , Size (..)
   , defSize
   , Align (..)
@@ -144,7 +145,7 @@ module Lipstick.Internal.Mod
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Lipstick.Internal.Border (Border, normalBorder)
-import Lipstick.Internal.Color (Color)
+import Lipstick.Internal.Color (Color, blend)
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Types
 
@@ -282,6 +283,40 @@ borderEdges p =
    in ( fromMaybe normalBorder (borderChars p)
       , Edges (on sideTop) (on sideRight) (on sideBottom) (on sideLeft)
       )
+
+-- | Recolour the border cells with a gradient, clockwise from the top-left
+-- and rotated clockwise by an offset. The rows are the bordered box; @nl@
+-- and @nr@ are the number of cells in the left and right border columns.
+blendBorder :: [Color] -> Int -> Edges -> Int -> Int -> [[Cell]] -> [[Cell]]
+blendBorder [] _ _ _ _ rows = rows
+blendBorder stops offset edges nl nr rows =
+  let (topRows, rest) = splitAt (if edgeTop edges then 1 else 0) rows
+      (middleRows, bottomRows) = splitAt (length rest - (if edgeBottom edges then 1 else 0)) rest
+      n = sum (map length topRows) + length middleRows * (nr + nl) + sum (map length bottomRows)
+      colors = rotate offset (blend n stops)
+      (cTop, c1) = splitAt (sum (map length topRows)) colors
+      (cRight, c2) = splitAt (length middleRows * nr) c1
+      (cBottom, cLeft) = splitAt (sum (map length bottomRows)) c2
+      paint cs cells = zipWith (\c cell -> cell {cellAttrs = (cellAttrs cell) {attrFg = Just c}}) cs cells
+      rightCols = chunks nr cRight
+      leftCols = reverse (chunks nl cLeft)
+      middle' =
+        [ let (l, rest') = splitAt nl row
+              (inner, r) = splitAt (length rest' - nr) rest'
+           in paint (reverse lc) l ++ inner ++ paint rc r
+        | (row, lc, rc) <- zip3 middleRows (leftCols ++ repeat []) (rightCols ++ repeat [])
+        ]
+   in [paint cTop row | row <- topRows]
+        ++ middle'
+        ++ [reverse (paint cBottom (reverse row)) | row <- bottomRows]
+  where
+    rotate k xs
+      | null xs = xs
+      | otherwise = let r = length xs - k `mod` length xs in drop r xs ++ take r xs
+    chunks k xs
+      | k <= 0 = []
+      | null xs = []
+      | otherwise = let (a, b) = splitAt k xs in a : chunks k b
 
 -- | Width and height include padding and border, but not margins.
 data Size = Size

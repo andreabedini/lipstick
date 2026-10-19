@@ -1127,6 +1127,11 @@ deferredLayoutTests =
         row (table stretchHeight ["a"] [["1"]]) @?= ["╭─╮", "│a│", "├─┤", "│1│", "│ │", "╰─╯"]
         row (list (stretchHeight <> itemStyle (bg red)) ["q"]) @?= ["• q", "   ", "   ", "   ", "   ", "   "]
         blockHeight (table stretchHeight ["a"] [["1"]]) @?= 5
+    , testCase "borderFgBlend colours a table's border as a style's" $ do
+        let colours b = [c | l <- gridLines (layout Nothing b), sp <- lineSpans l, Just c <- [attrFg (spanAttrs sp)]]
+            tableColours = colours (table (borderFgBlend [red, blue] <> borderFgBlendOffset 1) ["a"] [["1"]])
+        tableColours @?= colours (render (border roundedBorder <> borderFgBlend [red, blue] <> borderFgBlendOffset 1) "a\n─\n1")
+        length tableColours @?= 12
     , testCase "a table does not stretch past maxHeight, and keeps its bottom border" $ do
         last (plainLines (table (maxHeight 9 <> height 12) ["n"] [["1"], ["2"], ["3"]])) @?= "╰─╯"
         plainLines (hcat [render (height 8) "x", table (stretchHeight <> maxHeight 6) ["a"] [["1"]]]) !! 5 @?= " ╰─╯"
