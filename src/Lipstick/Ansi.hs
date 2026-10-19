@@ -225,12 +225,14 @@ fromAnsi = Inline . go mempty
               Just (']', r') -> osc a r'
               Just (c, r')
                 -- DCS, SOS, PM, APC
-                | c `elem` ['P', 'X', '^', '_'] -> go a (afterString (T.dropWhile (not . endsString) r'))
+                | c `elem` ['P', 'X', '^', '_'] -> go a (controlString r')
                 -- ESC, intermediates, final (e.g. ESC ( B)
                 | c >= ' ' && c <= '/' -> go a (T.drop 1 (T.dropWhile (\x -> x >= ' ' && x <= '/') r'))
+                -- ESC ESC: the first one is cut short by the second.
+                | c == '\ESC' -> go a r
                 | otherwise -> go a r'
               Nothing -> []
-            Just (_, r) -> go a (afterString (T.dropWhile (not . endsString) r))
+            Just (_, r) -> go a (controlString r)
 
     -- CSI: parameters, intermediates, final byte.
     csi a r =
@@ -249,6 +251,11 @@ fromAnsi = Inline . go mempty
     -- A control string ends with ST (ESC \ or 0x9C) or BEL, or is cut
     -- short by the ESC of another sequence.
     endsString c = c == '\a' || c == '\ESC' || c == '\x9C'
+    -- The payload of DCS, SOS, PM or APC. tmux passthrough doubles every
+    -- ESC of the sequence it wraps, so ESC ESC does not end the string.
+    controlString r =
+      let r1 = T.dropWhile (not . endsString) r
+       in maybe (afterString r1) controlString (T.stripPrefix "\ESC\ESC" r1)
     afterString r = case T.uncons r of
       Just ('\ESC', x) -> fromMaybe r (T.stripPrefix (T.singleton '\\') x)
       Just (_, x) -> x
