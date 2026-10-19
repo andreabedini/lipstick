@@ -234,6 +234,11 @@ fromAnsiTests =
     , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
     , testCase "control string payloads are dropped" $
         parsed "a\ESC_Gf=100;AAAA\ESC\\b\ESCPtmux;payload\ESC\\c\ESCXsos\ESC\\d\ESC^pm\ae" @?= "abcde"
+    , testCase "tmux passthrough is dropped" $ do
+        parsed "a\ESCPtmux;\ESC\ESC_Gf=100,a=T;iVBORw0KGgo=\ESC\ESC\\\ESC\\b" @?= "ab"
+        parsed "\ESCPtmux;\ESC\ESC]52;c;aGVsbG8=\a\ESC\\after" @?= "after"
+    , testCase "ESC ESC starts the sequence again" $
+        parsed "\ESC\ESC[31mx" @?= "\ESC[0;31mx\ESC[0m"
     , testCase "8-bit control strings are dropped" $
         parsed "a\x90q#0;2\x9C\&b\x9F\&apc\x9C\&c\x98sos\ESC\\d" @?= "abcd"
     , testCase "an escape cuts a control string short" $
