@@ -1127,6 +1127,11 @@ deferredLayoutTests =
         row (table stretchHeight ["a"] [["1"]]) @?= ["╭─╮", "│a│", "├─┤", "│1│", "│ │", "╰─╯"]
         row (list (stretchHeight <> itemStyle (bg red)) ["q"]) @?= ["• q", "   ", "   ", "   ", "   ", "   "]
         blockHeight (table stretchHeight ["a"] [["1"]]) @?= 5
+    , testCase "a table under an inherited noWrap shrinks as with its own" $ do
+        let t m = table m ["name"] [["a long cell", "x"]]
+        blockMinWidth (frame noWrap (t mempty)) @?= blockMinWidth (t noWrap)
+        plainLinesAt 30 (hcat [frame noWrap (t mempty), render (border normalBorder) "aaa bbb ccc"])
+          @?= plainLinesAt 30 (hcat [t noWrap, render (border normalBorder) "aaa bbb ccc"])
     , testCase "borderFgBlend colours a table's border as a style's" $ do
         let colours b = [c | l <- gridLines (layout Nothing b), sp <- lineSpans l, Just c <- [attrFg (spanAttrs sp)]]
             tableColours = colours (table (borderFgBlend [red, blue] <> borderFgBlendOffset 1) ["a"] [["1"]])

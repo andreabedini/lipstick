@@ -110,7 +110,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, allocate, cropLayoutWidth, defTextStyle, measureIn, takenWidth, textBlock)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle (..), allocate, cropLayoutWidth, defTextStyle, measureIn, takenWidth, textBlock)
 import Lipstick.Internal.Types (Attrs (..))
 import Lipstick.Internal.Mod
 import Lipstick.Style (Style, frame)
@@ -262,10 +262,11 @@ tableLayout ctx m headers rows
     bodyRows = [(BodyCell i, padRow r) | (i, r) <- zip [0 ..] rows]
 
     -- Cells stretch to the height of their row. Header cells, and body
-    -- cells with noWrap, are cut with an ellipsis instead of wrapped.
+    -- cells with noWrap (the table's or one it inherits), are cut with an
+    -- ellipsis instead of wrapped.
     truncates pos = case pos of
       HeaderCell _ -> True
-      BodyCell _ _ -> not (tableWrap t)
+      BodyCell _ _ -> not (tableWrap t && textWrap ctx)
     cellNodes (mk, r) =
       [ measureIn ctx (frame (tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty) b)
       | (c, b) <- zip [0 ..] r
