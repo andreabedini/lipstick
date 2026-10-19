@@ -295,6 +295,9 @@ clearer rule exists, lipstick follows it. Notable differences:
 - Table columns shrink as CSS tables do: not below their longest word while
   another column can still wrap. lipgloss shrinks columns by their median
   cell width and may break words that did not need breaking.
+- An emoji with a skin tone modifier is two columns wide even when the
+  emoji alone is one, as in `☝🏻` (UTS #51). lipgloss measures it by its
+  first character, one column, which no terminal shows.
 
 Not ported: `Alpha` (terminals cannot show transparency), the Windows
 build-number check (lipstick requires a Windows that supports ANSI
