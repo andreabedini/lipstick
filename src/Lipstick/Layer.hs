@@ -70,7 +70,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
-import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, defTextStyle, measureIn, takenWidth, usableWidth)
+import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, cropLayoutWidth, defTextStyle, measureIn, takenWidth, usableWidth)
 import Lipstick.Internal.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
 
 -- $setup
@@ -173,7 +173,10 @@ drawLayers :: Int -> [(Layer, Measured)] -> [(Layer, Grid)]
 drawLayers w ls =
   [ (l, withProps (layerProps l) (gridCells (fst (blockLayout m (Assign lw 0)))))
   | (l, m) <- ls
-  , let lw = takenWidth (layerRequest l m) (w - layerX l)
+  , let r = blockRequest m
+        -- As for a style: when the crop is what limits the layer, it is
+        -- laid out at its natural width and cut, not made to wrap.
+        lw = cropLayoutWidth (propMaxWidth (layerProps l)) (reqGrow r) (reqMax r) (takenWidth (layerRequest l m) (w - layerX l))
   ]
 
 -- | The width a canvas of layers takes in an available width, as for
