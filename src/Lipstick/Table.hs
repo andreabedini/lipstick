@@ -301,7 +301,8 @@ tableLayout ctx m headers rows
 
     run w = (gridTo, gridHeight (gridTo 0), shownRange)
       where
-        gridTo h = fitWidth w (withProps props (allLines h))
+        gridTo h = fitWidth w (withProps props (blended (allLines h)))
+        blended = blendBorder (borderFgStops bp) (borderFgOffset bp) edges (length (concat leftV)) (length (concat rightV))
         tableW = cropLayoutWidth (propMaxWidth props) weight hi w
         widths = allocate (tableW - frameW) [(colLo, colHi, columnWeight) | (colLo, colHi) <- zip narrowest natural]
 
