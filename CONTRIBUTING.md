@@ -22,7 +22,9 @@ The commit types choose the next version:
 | At least one `fix` or `perf` | `D` + 1 |
 | Only `docs`, `ci`, `test`, `refactor`, `build`, `chore`, `style` | No release |
 
-Pull requests are merged with rebase merge. A squash merge would leave only the PR title for the release task to read.
+Pull requests are merged with rebase merge. A squash merge would leave only the PR title for the release task to read. The check rejects merge commits and GitHub's `Revert "…"` messages, which are not Conventional Commits: bring a pull request up to date by rebasing it on `main`, and write a revert as `revert: …`.
+
+Only the pull request of the release task, from its branch `release-VERSION`, may have a `chore(release):` commit, as its last commit: merging one publishes a release.
 
 ## Versions
 
@@ -43,7 +45,7 @@ The maintainer makes releases.
 1. Make sure that `main` is green.
 2. Run `mise run release-pr`. It reads the commits since the last release tag, sets the next version in every `.cabal` file, adds a section for the release to every package's `CHANGELOG.md` with [git-cliff](https://git-cliff.org/), and opens a pull request titled `chore(release): VERSION`. The `CHANGELOG.md` at the top lists every commit and gives the release notes; `lipstick-brick/CHANGELOG.md` lists the commits that change `lipstick-brick/`. A section for the release that is already in a `CHANGELOG.md`, written by hand, is kept with the date of the release. If there are no releasable commits, it says so and does nothing.
 3. Review the pull request. Edit the new sections of `CHANGELOG.md` as you like; the next release keeps them. To increment `A`, change the version by hand in every `.cabal` file, and change the `CHANGELOG.md` headings and the commit description to the same version.
-4. When `ci-ok` passes, merge the pull request with rebase merge.
+4. When `ci-ok` passes, merge the pull request with rebase merge. CI checks that the version is at least the one that the commits since the last release call for, on the pull request and again on `main`; if `main` gained a breaking change after the task ran, the check fails, and the task must run again.
 5. CI's `release` job sees the release commit on `main`. It publishes a GitHub release with the source distributions of `lipstick` and `lipstick-brick` and their documentation for Hackage (`PACKAGE-VERSION-docs.tar.gz`), their `SHA256SUMS`, and the notes from `CHANGELOG.md`. Publishing creates the tag. Then the `pages` job publishes the documentation of the release to <https://andreabedini.github.io/lipstick/>.
 6. Verify the release:
 
