@@ -98,6 +98,13 @@ module Lipstick.Block
   , joinVertical
   , hcat
   , vcat
+  , Position
+  , position
+  , left
+  , center
+  , right
+  , top
+  , bottom
   ) where
 
 import Data.IntSet qualified as IntSet

@@ -42,12 +42,15 @@ module Lipstick.Grid
   , cellText
   , cellAttrs
   , cellWidth
+
+    -- * Attributes
+  , Attrs (attrFg, attrBg, attrUnderlineColor, attrBold, attrFaint, attrItalic, attrBlink, attrReverse, attrStrikethrough, attrUnderline, attrLink)
   ) where
 
 import Data.Text (Text)
 import Lipstick.Internal.Grid (Cell, Grid, Line, Span (..), lineSpans)
 import Lipstick.Internal.Grid qualified as I
-import Lipstick.Internal.Types (Attrs)
+import Lipstick.Internal.Types (Attrs (..))
 
 -- $setup
 -- >>> import Lipstick
