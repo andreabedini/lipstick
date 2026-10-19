@@ -113,9 +113,11 @@ module Lipstick.Mod
   , blink
   , reverseVideo
   , strikethrough
+  , Flag (..)
   , flag
   , unsetFlag
   , underline
+  , Underline (..)
   , underlineStyle
   , underlineColor
   , fg
@@ -184,12 +186,20 @@ module Lipstick.Mod
   , align
   , valign
   , unsetAlign
+  , Position
+  , position
+  , left
+  , center
+  , right
+  , top
+  , bottom
 
     -- * Wrapping
   , noWrap
   ) where
 
 import Lipstick.Internal.Mod
+import Lipstick.Internal.Types (Flag (..), Position, Underline (..), bottom, center, left, position, right, top)
 
 -- $setup
 -- >>> import Lipstick
