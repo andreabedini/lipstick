@@ -227,15 +227,14 @@ fromAnsi = Inline . go mempty
                 -- DCS, SOS, PM, APC
                 | c `elem` ['P', 'X', '^', '_'] -> go a (controlString r')
                 -- ESC, intermediates, final (e.g. ESC ( B)
-                | c >= ' ' && c <= '/' -> go a (T.drop 1 (T.dropWhile (\x -> x >= ' ' && x <= '/') r'))
-                -- ESC ESC: the first one is cut short by the second.
-                | c == '\ESC' -> go a r
-                | otherwise -> go a r'
+                | c >= ' ' && c <= '/' -> go a (escFinal (T.dropWhile (\x -> x >= ' ' && x <= '/') r'))
+                | otherwise -> go a (escFinal r)
               Nothing -> []
             Just (_, r) -> go a (controlString r)
 
-    -- CSI: parameters, intermediates, final byte. Only a sequence with
-    -- neither a private marker (<=>?), as in xterm's CSI > 4 ; 2 m, nor
+    -- CSI: parameters, intermediates, final byte; anything else cuts it
+    -- short and is kept, as after ESC. Only a sequence with neither a
+    -- private marker (<=>?), as in xterm's CSI > 4 ; 2 m, nor
     -- intermediates is SGR.
     csi a r =
       let (params, r1) = T.span (\c -> c >= '0' && c <= '?') r
@@ -243,8 +242,15 @@ fromAnsi = Inline . go mempty
           isSGR = T.all (\c -> c < '<') params && T.null inter
        in case T.uncons r2 of
             Just ('m', r3) | isSGR -> go (applySGR (sgrGroups params) a) r3
-            Just (_, r3) -> go a r3
-            Nothing -> []
+            Just (c, r3) | c >= '@' && c <= '~' -> go a r3
+            _ -> go a r2
+
+    -- The final byte of an escape sequence. Anything else, such as a
+    -- newline or the ESC of another sequence, cuts the sequence short and
+    -- is kept.
+    escFinal r = case T.uncons r of
+      Just (c, r') | c >= '0' && c <= '~' -> r'
+      _ -> r
 
     -- OSC: up to BEL or ST.
     osc a r =
