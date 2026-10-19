@@ -328,7 +328,19 @@ only when printing. From the source of layoutz 0.4.0.0:
 | Existing ANSI text, hyperlinks | no                                                       | `fromAnsi`, `link`                                          |
 | Charts, spinners, prompts, application loop | yes                                         | no; for full-screen applications, brick through lipstick-brick |
 
+## Documentation
+
+The API documentation of the latest release is at
+<https://andreabedini.github.io/lipstick/>.
+
+Each [release](https://github.com/andreabedini/lipstick/releases) also has the
+documentation of every package with a library, as
+`PACKAGE-VERSION-docs.tar.gz`, in the format Hackage takes.
+
 ## Development
+
+Commit messages, versions and releases are described in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```
 cabal build all
