@@ -234,12 +234,15 @@ fromAnsi = Inline . go mempty
               Nothing -> []
             Just (_, r) -> go a (controlString r)
 
-    -- CSI: parameters, intermediates, final byte.
+    -- CSI: parameters, intermediates, final byte. Only a sequence with
+    -- neither a private marker (<=>?), as in xterm's CSI > 4 ; 2 m, nor
+    -- intermediates is SGR.
     csi a r =
       let (params, r1) = T.span (\c -> c >= '0' && c <= '?') r
-          r2 = T.dropWhile (\c -> c >= ' ' && c <= '/') r1
+          (inter, r2) = T.span (\c -> c >= ' ' && c <= '/') r1
+          isSGR = T.all (\c -> c < '<') params && T.null inter
        in case T.uncons r2 of
-            Just ('m', r3) -> go (applySGR (sgrGroups params) a) r3
+            Just ('m', r3) | isSGR -> go (applySGR (sgrGroups params) a) r3
             Just (_, r3) -> go a r3
             Nothing -> []
 

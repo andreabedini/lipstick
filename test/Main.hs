@@ -231,6 +231,10 @@ fromAnsiTests =
         parsed "\ESC]8;id=1;http://a\ax\ESC]8;;\a" @?= "\ESC]8;;http://a\ESC\\x\ESC]8;;\ESC\\"
     , testCase "other sequences are dropped" $
         parsed "\ESC[2K\ESC(Bab\ESC]0;title\acd\ESC7" @?= "abcd"
+    , testCase "private and intermediate CSI ending in m are not SGR" $ do
+        parsed "\ESC[1mA\ESC[>4;2mB" @?= "\ESC[0;1mAB\ESC[0m"
+        parsed "\ESC[1m\ESC[<5mx\ESC[?0my" @?= "\ESC[0;1mxy\ESC[0m"
+        parsed "\ESC[1m\ESC[0 mx" @?= "\ESC[0;1mx\ESC[0m"
     , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
     , testCase "control string payloads are dropped" $
         parsed "a\ESC_Gf=100;AAAA\ESC\\b\ESCPtmux;payload\ESC\\c\ESCXsos\ESC\\d\ESC^pm\ae" @?= "abcde"
