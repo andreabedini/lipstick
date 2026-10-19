@@ -5,8 +5,9 @@
 -- its first character with a non-zero width: two columns for East Asian
 -- Wide and Fullwidth characters, none for controls, combining marks and
 -- Hangul vowels and final consonants, one otherwise. An emoji followed by
--- VS16 is two columns wide and by VS15 one; a pair of regional indicators
--- (a flag) is two.
+-- VS16 or a skin tone modifier is two columns wide, as is a skin tone
+-- modifier on its own; VS15 does not change the width. A pair of regional
+-- indicators (a flag) is two.
 --
 -- The tables are generated from the Unicode Character Database by
 -- @scripts/GenUnicodeTable.hs@; see 'unicodeVersion'.

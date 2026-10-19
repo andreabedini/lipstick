@@ -170,18 +170,26 @@ joins st prevP nextP
 
 codeWidth :: Word16 -> Int
 codeWidth p
+  | isEmojiModifier p = 2
   | g `elem` [gcbControl, gcbCR, gcbLF, gcbExtend, gcbZWJ, gcbV, gcbT] = 0
   | isWide p = 2
   | otherwise = 1
   where
     g = gcb p
 
+-- | The skin tone modifiers: Extend, so they join the emoji before them,
+-- but wide.
+isEmojiModifier :: Word16 -> Bool
+isEmojiModifier p = gcb p == gcbExtend && isEmoji p
+
+-- | VS16 and a skin tone modifier both make an emoji wide (UTS #51), also
+-- one that is narrow on its own, such as ☝. VS15 changes nothing: it asks
+-- for text presentation, not for a width.
 clusterWidth :: [(Char, Word16)] -> Int
 clusterWidth cl = case cl of
   [(_, p1), (_, p2)] | gcb p1 == gcbRI && gcb p2 == gcbRI -> 2
   (_, p) : rest
-    | isEmoji p && any ((== '\xFE0F') . fst) rest -> 2
-    | isEmoji p && any ((== '\xFE0E') . fst) rest -> 1
+    | isEmoji p && any (\(c, q) -> c == '\xFE0F' || isEmojiModifier q) rest -> 2
   _ -> case filter (> 0) (map (codeWidth . snd) cl) of
     w : _ -> w
     [] -> 0
