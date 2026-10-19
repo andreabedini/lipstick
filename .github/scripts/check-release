@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Checks a release commit, the head of a release PR or of main:
+#
+#   check-release COMMIT VERSION BUMPED
+#
+# Its subject is "chore(release): VERSION", every package has VERSION,
+# CHANGELOG.md has a section for it, and VERSION is at least BUMPED, the
+# version that git-cliff calls for with the commits since the last release.
+# A release PR that is behind main, whose branch lacks a feat! merged after
+# `mise run release-pr`, would otherwise release it under too small a
+# version. A version above BUMPED is a hand increment of A.
+set -euo pipefail
+
+commit=$1
+version=$2
+# git-cliff-action gives the version with a newline.
+bumped=${3//[[:space:]]/}
+bumped=${bumped#v}
+
+fail() {
+  echo "::error::$1"
+  exit 1
+}
+
+subject=$(git log -1 --format=%s "$commit")
+# A squash merge appends " (#123)" to the subject.
+if [[ $subject != "chore(release): $version" && $subject != "chore(release): $version (#"*")" ]]; then
+  fail "The release commit \"$subject\" does not match version $version"
+fi
+
+while read -r cabal; do
+  v=$(sed -n -E 's/^version:[[:space:]]+//p' "$cabal")
+  [[ $v == "$version" ]] || fail "$cabal has version $v, not $version"
+done < <(git ls-files '*.cabal')
+
+grep -q "^## \[${version//./\\.}\]" CHANGELOG.md || fail "CHANGELOG.md has no section for $version"
+
+lowest=$(printf '%s\n' "$bumped" "$version" | sort -V | head -n 1)
+if [[ $lowest != "$bumped" ]]; then
+  fail "The commits since the last release call for version $bumped, above $version: run mise run release-pr again"
+fi

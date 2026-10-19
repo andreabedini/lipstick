@@ -5,10 +5,11 @@ name: CI
 # cabal.project; docs makes the Haddock documentation for Hackage and for
 # GitHub Pages; dist checks the versions of the source distributions and the
 # documentation tarballs, and uploads them with SHA256SUMS as one artifact;
-# commits checks the commit messages of a PR; ci-ok is the one check that
-# the ruleset requires; release publishes dist when the head of main is a
-# release commit, made by `mise run release-pr`; pages then publishes the
-# documentation to GitHub Pages. The project publishes no executables.
+# commits checks the commit messages of a PR, and the release commit of a
+# release PR; ci-ok is the one check that the ruleset requires; release
+# publishes dist when the head of main is a release commit, made by `mise
+# run release-pr`; pages then publishes the documentation to GitHub Pages.
+# The project publishes no executables.
 #
 # A manual run (Actions > CI > Run workflow, or `gh workflow run ci.yml
 # --ref BRANCH`) makes every artifact of a release, in dist, without
@@ -142,7 +143,7 @@ jobs:
   # are reproducible.
   sdist:
     name: sdist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -226,7 +227,7 @@ jobs:
   commits:
     name: commits
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -236,12 +237,53 @@ jobs:
         with:
           # The same version as in mise.toml.
           version: v2.14.2
-          args: --verbose origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}
+          # The action pastes args into a shell command, so they name
+          # variables for that shell to expand rather than the values.
+          args: --verbose "origin/$BASE_REF..$HEAD_SHA"
         env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GIT_CLIFF__GIT__FILTER_UNCONVENTIONAL: "false"
           GIT_CLIFF__GIT__FILTER_COMMITS: "false"
           GIT_CLIFF__GIT__REQUIRE_CONVENTIONAL: "true"
           GIT_CLIFF__GIT__FAIL_ON_UNMATCHED_COMMIT: "true"
+
+      # A release commit publishes a release when it lands on main, so only
+      # the PR of `mise run release-pr`, from branch release-VERSION, may
+      # have one, as its last commit. The release job checks it again after
+      # the merge; checking it here too means that a mistake fails the PR
+      # rather than landing on main.
+      - name: Next version
+        id: bump
+        if: startsWith(github.head_ref, 'release-')
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          args: --bumped-version
+
+      - name: Check release commits
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BUMPED: ${{ steps.bump.outputs.content }}
+        run: |
+          releases=$(git log --format=%s "origin/$BASE_REF..$HEAD_SHA" | grep -c '^chore(release):' || true)
+          if [[ $HEAD_REF != release-* ]]; then
+            if (( releases > 0 )); then
+              echo "::error::Only a release PR, from mise run release-pr, may have a chore(release) commit"
+              exit 1
+            fi
+            exit 0
+          fi
+          if (( releases != 1 )) || [[ $(git log -1 --format=%s "$HEAD_SHA") != 'chore(release): '* ]]; then
+            echo "::error::A release PR has one chore(release) commit, its last"
+            exit 1
+          fi
+          # The version of the packages, which a hand increment of A changes
+          # without renaming the branch.
+          version=$(sed -n -E 's/^version:[[:space:]]+//p' "$(git ls-files '*.cabal' | head -n 1)")
+          bash .github/scripts/check-release "$HEAD_SHA" "$version" "$BUMPED"
 
   # Everything that a release publishes, checked, in one artifact "dist":
   # the source distributions,
@@ -251,7 +293,7 @@ jobs:
   dist:
     name: dist
     needs: [build, sdist, docs]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
@@ -308,7 +350,7 @@ jobs:
     name: ci-ok
     if: always()
     needs: [build, sdist, docs, dist, commits]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
@@ -326,7 +368,7 @@ jobs:
       !cancelled() && needs.ci-ok.result == 'success'
       && github.event_name == 'push' && github.ref == 'refs/heads/main'
       && startsWith(github.event.head_commit.message, 'chore(release): ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     permissions:
       contents: write
@@ -336,20 +378,28 @@ jobs:
       group: release
       cancel-in-progress: false
     steps:
+      # The whole history and the tags, for git-cliff. The token is not
+      # kept in .git/config: gh gets it from GH_TOKEN.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Next version
+        id: bump
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          args: --bumped-version
 
       - name: Plan
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.dist.outputs.version }}
+          BUMPED: ${{ steps.bump.outputs.content }}
         run: |
-          subject=$(git log -1 --format=%s)
-          # A squash merge appends " (#123)" to the subject.
-          if [[ $subject != "chore(release): $VERSION" && $subject != "chore(release): $VERSION (#"*")" ]]; then
-            echo "::error::The release commit \"$subject\" does not match version $VERSION of the packages"
-            exit 1
-          fi
+          bash .github/scripts/check-release HEAD "$VERSION" "$BUMPED"
           state=$(gh release view "v$VERSION" --json isDraft \
                     --jq 'if .isDraft then "draft" else "published" end' 2>/dev/null || echo none)
           echo "v$VERSION: $state"
@@ -371,10 +421,6 @@ jobs:
           VERSION: ${{ needs.dist.outputs.version }}
         run: |
           awk -v v="$VERSION" '/^## /{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > NOTES.md
-          if [ ! -s NOTES.md ]; then
-            echo "::error::CHANGELOG.md has no section for $VERSION"
-            exit 1
-          fi
 
       - name: Attest build provenance
         if: steps.plan.outputs.state != 'published'
@@ -407,7 +453,7 @@ jobs:
     name: pages
     needs: release
     if: ${{ !cancelled() && needs.release.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
