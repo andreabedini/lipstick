@@ -235,6 +235,10 @@ fromAnsiTests =
         parsed "\ESC[1mA\ESC[>4;2mB" @?= "\ESC[0;1mAB\ESC[0m"
         parsed "\ESC[1m\ESC[<5mx\ESC[?0my" @?= "\ESC[0;1mxy\ESC[0m"
         parsed "\ESC[1m\ESC[0 mx" @?= "\ESC[0;1mx\ESC[0m"
+    , testCase "a newline cuts an escape sequence short and stays" $ do
+        plainLines (fromInline (fromAnsi "\ESC[31\nfoo")) @?= ["   ", "foo"]
+        ansiHeight "a\ESC\nb" @?= 2
+        ansiHeight "a\ESC(\nb" @?= 2
     , testCase "8-bit CSI" $ parsed "\x9B\&1mA" @?= "\ESC[0;1mA\ESC[0m"
     , testCase "control string payloads are dropped" $
         parsed "a\ESC_Gf=100;AAAA\ESC\\b\ESCPtmux;payload\ESC\\c\ESCXsos\ESC\\d\ESC^pm\ae" @?= "abcde"
