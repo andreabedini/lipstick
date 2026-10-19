@@ -63,7 +63,7 @@
 --
 -- An enumerator of your own:
 --
--- >>> let arrows = Enumerator {enumMarker = const "→ ", enumIndent = const Nothing}
+-- >>> let arrows = markers (const "→ ")
 -- >>> putBlock (list (enumerator arrows) shops)
 -- → Glossier
 -- → Claire's Boutique
