@@ -36,6 +36,14 @@ jobs:
 
       - uses: actions/checkout@v7
 
+      # Image 20261013 ships the Command Line Tools 27.0, with the macOS 27
+      # SDK, but keeps Xcode 26.6 selected, whose linker cannot read that
+      # SDK ("tapi error: malformed file"). Use the Command Line Tools'
+      # own linker until the image is fixed (actions/runner-images#14940).
+      - name: Select the Command Line Tools
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
+
       - uses: haskell-actions/setup@v2
         id: setup
         with:
