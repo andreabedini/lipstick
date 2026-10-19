@@ -226,20 +226,21 @@ outline o props entriesIn = Block $ \ctx -> outlineNode o props [(e, measureIn c
 outlineNode :: Outline -> Props -> [(Entry, Measured)] -> Measured
 outlineNode o props entries = Measured req run
   where
-    Size wSet hSet weight _ = outSize o
+    Size wSet hSet weight stretch = outSize o
     -- With a width, that is the width when there is room for it, as for a
     -- style; items wrap to fit.
     natural = fromMaybe (maximum (0 : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])) wSet
     smallest = fromMaybe (maximum (0 : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])) wSet
     capW x = maybe x (min x . max 0) (propMaxWidth props)
     capH x = maybe x (min x . max 0) (propMaxHeight props)
-    req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) False False
-    run (Assign w _) = (fitWidth w (withProps props tall), capH (max (fromMaybe 0 hSet) (sum (map snd laid))))
+    req = Request (capW smallest) (capW natural) weight (max 0 <$> propMaxWidth props) stretch False
+    run (Assign w h) = (fitWidth w (withProps props tall), capH (max (fromMaybe 0 hSet) (sum (map snd laid))))
       where
         wide = cropLayoutWidth (propMaxWidth props) weight natural w
         laid = map entryLines entries
         padded = [alignCells a left wide l | (ls, _) <- laid, (a, l) <- ls]
-        tall = padded ++ replicate (fromMaybe 0 hSet - length padded) (blankCells mempty wide)
+        tallest = max (fromMaybe 0 hSet) (if stretch then h else 0)
+        tall = padded ++ replicate (tallest - length padded) (blankCells mempty wide)
         entryLines (e, node) =
           let (g, n) = blockLayout node (Assign (takenWidth (blockRequest node) (wide - prefixWidth e)) 0)
               body = case gridCells g of

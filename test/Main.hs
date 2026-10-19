@@ -1122,6 +1122,14 @@ deferredLayoutTests =
           @?= ["┌─────┐", "│aaa  │", "│bbb  │", "│ccc  │", "└─────┘"]
     , testCase "a block narrower than the space keeps its natural width" $
         plainLinesAt 40 (render (border normalBorder) "hi") @?= ["┌──┐", "│hi│", "└──┘"]
+    , testCase "tables and outlines stretch to the height of a row" $ do
+        let row b = map (T.drop 1) (plainLines (hcat [render (height 6) "x", b]))
+        row (table stretchHeight ["a"] [["1"]]) @?= ["╭─╮", "│a│", "├─┤", "│1│", "│ │", "╰─╯"]
+        row (list (stretchHeight <> itemStyle (bg red)) ["q"]) @?= ["• q", "   ", "   ", "   ", "   ", "   "]
+        blockHeight (table stretchHeight ["a"] [["1"]]) @?= 5
+    , testCase "a table does not stretch past maxHeight, and keeps its bottom border" $ do
+        last (plainLines (table (maxHeight 9 <> height 12) ["n"] [["1"], ["2"], ["3"]])) @?= "╰─╯"
+        plainLines (hcat [render (height 8) "x", table (stretchHeight <> maxHeight 6) ["a"] [["1"]]]) !! 5 @?= " ╰─╯"
     , testCase "fillWidth takes the spare columns of a row" $
         plainLinesAt 12 (hcat [render (width 4) "ab", render (fillWidth <> bg red) "cd", "!"])
           @?= ["ab  cd     !"]
