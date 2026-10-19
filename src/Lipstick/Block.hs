@@ -127,7 +127,10 @@ blockWidth = reqMax . blockRequest . measure
 blockHeight :: Block -> Int
 blockHeight b = snd (blockLayout (measure b) (Assign (blockWidth b) 0))
 
--- | The narrowest a block can be laid out without breaking words.
+-- | The narrowest a block can be laid out without breaking words, or the
+-- 'Lipstick.Mod.width' it is given: a box with a width shrinks below it
+-- only when there is no room, and counts it as its smallest when width is
+-- shared out.
 blockMinWidth :: Block -> Int
 blockMinWidth = reqMin . blockRequest . measure
 

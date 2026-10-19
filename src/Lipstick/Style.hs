@@ -184,7 +184,8 @@ unsetTabWidth :: Mod Style
 unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 
 -- | Render on a single line: newlines are removed, and padding, margins,
--- border, size and alignment are ignored, except 'maxWidth'.
+-- border, size and alignment are ignored, except 'maxWidth' and
+-- 'maxHeight'.
 --
 -- >>> putBlock (render (inline <> border normalBorder <> padding 1 1) "one\ntwo")
 -- onetwo

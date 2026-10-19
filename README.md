@@ -100,11 +100,12 @@ place
 
 ![The word "centred" in the middle of an area filled with dots](https://raw.githubusercontent.com/andreabedini/lipstick/main/docs/images/place.svg)
 
-`frame` puts an existing block in a box, `joinVertical`, `hcat` and `vcat`
-stack blocks, and `blockWidth` / `blockHeight` measure them. A style's
-text settings (`align`, `noWrap`, `breakAfter`, `tabWidth`, `transform`)
-apply to all the text inside what it frames, unless something nearer sets
-them again, as its colours do: `render style text` is `frame style (fromInline text)`.
+`frame` puts an existing block in a box, `joinHorizontal` and `hcat` put
+blocks side by side, `joinVertical` and `vcat` stack them, and
+`blockWidth` / `blockHeight` measure them. A style's text settings
+(`align`, `noWrap`, `breakAfter`, `tabWidth`, `transform`) apply to all
+the text inside what it frames, unless something nearer sets them again,
+as its colours do: `render style text` is `frame style (fromInline text)`.
 
 A block does not have a fixed width: it is laid out in the width it is
 given, and text in it wraps to fit. `fillWidth` (or `grow n`) makes a block
@@ -245,8 +246,9 @@ output supports. Detection follows the usual conventions: no escape
 sequences when the output is not a terminal (unless `CLICOLOR_FORCE` is
 set), no colours with `NO_COLOR`, and the colour depth from `COLORTERM` and
 `TERM`. On Windows the console's ANSI processing is switched on as needed.
-Blocks are laid out in the terminal's width, or in `COLUMNS` if it is set;
-output that is not going to a terminal keeps its natural width.
+Blocks are laid out in `COLUMNS` if it is set, even when the output is not
+a terminal, or else in the terminal's width; output that is not going to a
+terminal otherwise keeps its natural width.
 
 The background is taken from `COLORFGBG` when the terminal sets it and is
 assumed dark otherwise. To ask the terminal, which takes a round trip and
@@ -340,7 +342,7 @@ documentation of every package with a library, as
 ## Development
 
 Commit messages, versions and releases are described in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/andreabedini/lipstick/blob/main/CONTRIBUTING.md).
 
 ```
 cabal build all
@@ -382,10 +384,10 @@ The conformance test data in `test/data/GraphemeBreakTest.txt` comes from
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). lipstick is a port of
+MIT, see [LICENSE](https://github.com/andreabedini/lipstick/blob/main/LICENSE). lipstick is a port of
 [lipgloss](https://github.com/charmbracelet/lipgloss), © Charmbracelet,
 also MIT licensed. The Unicode tables in
 `internal/Lipstick/Internal/UnicodeTable.hs` are generated from the Unicode
 Character Database, and `test/data/GraphemeBreakTest.txt` comes from it;
 both are © Unicode, Inc., under the Unicode License v3, see
-[LICENSE.Unicode](LICENSE.Unicode).
+[LICENSE.Unicode](https://github.com/andreabedini/lipstick/blob/main/LICENSE.Unicode).
