@@ -173,11 +173,13 @@ profileFromEnv :: Bool -> [(String, String)] -> ColorProfile
 profileFromEnv supported vars
   | not supported && not forced = NoTTY
   | set "NO_COLOR" = Ascii
-  | colorterm `elem` ["truecolor", "24bit"] = TrueColor
+  -- GNU Screen, where COLORTERM comes from the terminal outside it, does
+  -- not show true colour.
+  | colorterm `elem` ["truecolor", "24bit"] && not ("screen" `isPrefixOf` term) = TrueColor
   | set "WT_SESSION" = TrueColor
   | any (`isInfixOf` term) ["truecolor", "24bit", "direct"] = TrueColor
   | any (`isPrefixOf` term) trueColorTerms = TrueColor
-  | "256color" `isInfixOf` term = ANSI256
+  | "256color" `isInfixOf` term || any (`isPrefixOf` term) ["screen", "tmux"] = ANSI256
   | null term && os == "mingw32" = TrueColor
   | otherwise = ANSI16
   where
