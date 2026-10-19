@@ -188,7 +188,9 @@ textBlock inl = Block $ \ctx ->
       run (Assign w _) =
         let fitted
               | textInline ctx = map (cropCells w) ls
-              | textWrap ctx = concatMap (wrapCellsWith (textBreaks ctx) w) ls
+              -- With no room at all, text is cut rather than wrapped one
+              -- cluster a line, so that it does not grow tall for nothing.
+              | textWrap ctx && w > 0 = concatMap (wrapCellsWith (textBreaks ctx) w) ls
               | otherwise = map (truncateCells w) ls
          in (Grid w (length fitted) [cellsLine (cropCells w (alignText (textAlign ctx) w l)) | l <- fitted], length fitted)
    in Measured (Request lo hi 0 Nothing False True) run

@@ -1101,6 +1101,10 @@ deferredLayoutTests =
             let t = T.replicate n " " <> T.unwords ws
                 b = text t
              in T.words (T.unlines (plainLinesAt (blockMinWidth b) b)) === ws
+    , testCase "text with no room is cut, not wrapped" $ do
+        gridHeight (layout (Just 0) (text "hello world\nagain")) @?= 2
+        plainLinesAt 4 (hcat [render (border normalBorder) "hello", render (border normalBorder) "world"])
+          @?= ["┌┐┌┐", "││││", "└┘└┘"]
     , testCase "a box wraps its text inside the border" $
         plainLinesAt 12 (render (border normalBorder <> padding 0 1) "the quick brown fox")
           @?= ["┌──────────┐", "│ the      │", "│ quick    │", "│ brown    │", "│ fox      │", "└──────────┘"]
