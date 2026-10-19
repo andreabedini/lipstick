@@ -1069,6 +1069,18 @@ deferredLayoutTests =
          in gridWidth g === blockWidth b .&&. gridHeight g === blockHeight b
     , testCase "text wraps to the width" $
         plainLinesAt 10 (text "the quick brown fox") @?= ["the quick ", "brown fox "]
+    , testCase "indentation is dropped when the first word does not fit after it" $ do
+        plainLinesAt 10 (text "    indented word") @?= ["indented  ", "word      "]
+        plainLinesAt 3 (text "  abc") @?= ["abc"]
+        plainLinesAt 3 (text "\tfoo") @?= ["foo"]
+        plainLinesAt 10 (text "  indented word") @?= ["  indented", "word      "]
+        plainLinesAt 4 (text "  abcdef") @?= ["  ab", "cdef"]
+    , testProperty "text laid out at its smallest width breaks no word" $
+        forAll (chooseInt (0, 6)) $ \n ->
+          forAll (listOf1 (T.pack <$> listOf1 (elements "ab"))) $ \ws ->
+            let t = T.replicate n " " <> T.unwords ws
+                b = text t
+             in T.words (T.unlines (plainLinesAt (blockMinWidth b) b)) === ws
     , testCase "a box wraps its text inside the border" $
         plainLinesAt 12 (render (border normalBorder <> padding 0 1) "the quick brown fox")
           @?= ["┌──────────┐", "│ the      │", "│ quick    │", "│ brown    │", "│ fox      │", "└──────────┘"]
