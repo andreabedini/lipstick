@@ -875,6 +875,11 @@ profileTests =
     , testCase "NO_COLOR" $ profileFromEnv True [("NO_COLOR", "1"), ("COLORTERM", "truecolor")] @?= Ascii
     , testCase "COLORTERM" $ profileFromEnv True [("COLORTERM", "truecolor"), ("TERM", "xterm")] @?= TrueColor
     , testCase "256 colours" $ profileFromEnv True [("TERM", "screen-256color")] @?= ANSI256
+    , testCase "screen ignores COLORTERM, and screen and tmux show 256 colours" $ do
+        profileFromEnv True [("TERM", "screen"), ("COLORTERM", "truecolor")] @?= ANSI256
+        profileFromEnv True [("TERM", "screen.xterm-256color"), ("COLORTERM", "24bit")] @?= ANSI256
+        profileFromEnv True [("TERM", "tmux"), ("COLORTERM", "truecolor")] @?= TrueColor
+        profileFromEnv True [("TERM", "tmux")] @?= ANSI256
     , testCase "kitty" $ profileFromEnv True [("TERM", "xterm-kitty")] @?= TrueColor
     , testCase "ghostty" $ profileFromEnv True [("TERM", "xterm-ghostty")] @?= TrueColor
     , testCase "plain xterm" $ profileFromEnv True [("TERM", "xterm")] @?= ANSI16
