@@ -168,7 +168,8 @@ cropCells n cs
         | otherwise -> blankCells (cellAttrs c) n
 
 -- | Greedy word wrap to @w@ columns. Spaces at a break are dropped; words
--- longer than a line are broken. Leading spaces are kept as indentation.
+-- longer than a line are broken. Leading spaces are kept as indentation
+-- when the first word fits after them.
 wrapCells :: Int -> [Cell] -> [[Cell]]
 wrapCells = wrapCellsWith []
 
@@ -192,7 +193,9 @@ wrapCellsWith breakpoints w0 cells
 
     place acc accW sp wd ts
       | accW + cellsWidth sp + cellsWidth wd <= w = go (wd : sp : acc) (accW + cellsWidth sp + cellsWidth wd) ts
-      | null acc = hard (sp ++ wd) ts
+      -- Indentation that does not fit with the first word is dropped, like
+      -- spaces at a break, unless the word is broken anyway.
+      | null acc = hard (if cellsWidth wd <= w then wd else sp ++ wd) ts
       | otherwise = concat (reverse acc) : hard wd ts
 
     -- Start a new line with a word, breaking it if it is too long.
