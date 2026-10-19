@@ -106,7 +106,7 @@ module Lipstick.Table
 
 import Data.Array (Array, listArray, (!))
 import Data.List (intercalate, transpose)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text qualified as T
 import Lipstick.Border
 import Lipstick.Internal.Grid
@@ -227,22 +227,23 @@ fitContent = fieldMod (\t -> t {tableFitContent = True})
 table :: Mod Table -> [Block] -> [[Block]] -> Block
 table m headers rows = Block $ \ctx ->
   let (req, run) = tableLayout ctx m headers rows
-   in Measured req (\(Assign w _) -> let (g, _) = run w in (g, gridHeight g))
+   in Measured req (\(Assign w h) -> let (stretchTo, n, _) = run w in (stretchTo h, n))
 
 -- | The first and last body rows a table shows, laid out in an available
 -- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout';
 -- 'Nothing' when it shows none. All rows unless the table has a
 -- 'maxHeight'.
 visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> Maybe (Int, Int)
-visibleRows avail m headers rows = snd (run (maybe (reqMax req) (takenWidth req) avail))
+visibleRows avail m headers rows = shown
   where
+    (_, _, shown) = run (maybe (reqMax req) (takenWidth req) avail)
     (req, run) = tableLayout defTextStyle m headers rows
 
--- | What a table asks for, and how it lays out at a width, with the body
--- rows it shows.
-tableLayout :: TextStyle -> Mod Table -> [Block] -> [[Block]] -> (Request, Int -> (Grid, Maybe (Int, Int)))
+-- | What a table asks for, and how it lays out at a width: stretched to a
+-- height, its natural height, and the body rows it shows.
+tableLayout :: TextStyle -> Mod Table -> [Block] -> [[Block]] -> (Request, Int -> (Int -> Grid, Int, Maybe (Int, Int)))
 tableLayout ctx m headers rows
-  | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (Grid w 0 [], Nothing))
+  | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (const (Grid w 0 []), 0, Nothing))
   | otherwise = (req, run)
   where
     (t, props) = runMod m defTable
@@ -251,7 +252,7 @@ tableLayout ctx m headers rows
     sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
     -- Outer edges take their side's colours; inner rules take the top's.
     ba = sideAttrs sideTop
-    Size wSet hMin weight _ = tableSize t
+    Size wSet hMin weight stretch = tableSize t
     -- At most this many lines: body rows that do not fit are left out.
     hgt = propMaxHeight props
 
@@ -291,15 +292,16 @@ tableLayout ctx m headers rows
         | tableFitContent t -> (min n smallest, min n full)
         | otherwise -> (n, n)
       Nothing -> (smallest, full)
-    req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) False False
+    req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) stretch False
     -- Columns grow to a set width (unless they fit their content) or when
     -- the table grows. They shrink widest first, but not below their
     -- longest word while another column can still wrap; then further,
     -- widest first, down to one column.
     columnWeight = if tableFitContent t || (not (isJust wSet) && weight == 0) then 0 else 1
 
-    run w = (fitWidth w (withProps props (maybe allLines (`take` allLines) hgt)), shownRange)
+    run w = (gridTo, gridHeight (gridTo 0), shownRange)
       where
+        gridTo h = fitWidth w (withProps props (allLines h))
         tableW = cropLayoutWidth (propMaxWidth props) weight hi w
         widths = allocate (tableW - frameW) [(colLo, colHi, columnWeight) | (colLo, colHi) <- zip narrowest natural]
 
@@ -361,8 +363,11 @@ tableLayout ctx m headers rows
         shown = take (lastV - firstV + 1) (drop firstV bodyLines)
         overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
         body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
-        -- Up to the minimum height, lines of empty cells after the body.
+        -- Up to the minimum height, or the height to stretch to, lines of
+        -- empty cells after the body; never past maxHeight, so that the
+        -- bottom border stays.
         drawn = length topLines + length headerLines + length headerRuleLines + length body + length bottomLines
         emptyLine = take 1 (renderRow (cellNodes (BodyCell nBody, replicate ncols (textBlock mempty))))
-        filler = concat (replicate (maybe 0 (subtract drawn) hMin) emptyLine)
-        allLines = topLines ++ headerLines ++ headerRuleLines ++ body ++ filler ++ bottomLines
+        tallest h = maybe id min hgt (max (fromMaybe 0 hMin) (if stretch then h else 0))
+        filler h = concat (replicate (tallest h - drawn) emptyLine)
+        allLines h = topLines ++ headerLines ++ headerRuleLines ++ body ++ filler h ++ bottomLines
