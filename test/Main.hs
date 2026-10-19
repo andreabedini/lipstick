@@ -492,6 +492,8 @@ commonPropsTests =
         getAttrs (M.underlineStyle M.CurlyUnderline <> M.flag M.Bold True :: Mod Style)
           @?= getAttrs (underlineStyle CurlyUnderline <> bold :: Mod Style)
         G.attrBold (getAttrs (bold :: Mod Style)) @?= Just True
+    , testCase "positions show as what makes them" $
+        map show [center, position 0.25] @?= ["position 0.5", "position 0.25"]
     , testCase "style attributes do not colour the border" $
         toAnsi defaultRenderEnv (render (fg red <> border asciiBorder <> borderTop False <> borderBottom False) "x")
           @?= "|\ESC[0;31mx\ESC[0m|"

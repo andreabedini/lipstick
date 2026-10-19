@@ -116,7 +116,11 @@ escapeUri = T.concatMap escape
 
 -- | A position along an axis: 0 is left/top, 1 is right/bottom.
 newtype Position = Position Double
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+-- | Shown with 'position', since the constructor is hidden.
+instance Show Position where
+  showsPrec d (Position x) = showParen (d > 10) (showString "position " . showsPrec 11 x)
 
 -- | A position, clamped to [0, 1].
 position :: Double -> Position
