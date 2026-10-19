@@ -1,17 +1,36 @@
 #!/usr/bin/env zsh
-#MISE description="Open a release PR: bump the package versions and regenerate CHANGELOG.md"
+#MISE description="Open a release PR: bump the package versions and add the release to the changelogs"
 setopt err_exit no_unset pipe_fail
 
 # git-cliff reads release tags from git. jj does not need them, so fetch them with git.
 git fetch --tags --quiet origin
 jj git fetch
-# Start a new change on top of main. In a colocated repo, git HEAD is now main@origin,
-# so git-cliff reads the history of main and not of the current work.
+
+# The task makes the release change on top of main, then comes back to the
+# change it started from, however it ends. A starting change that was empty
+# is abandoned when the task moves away from it, so it comes back to its
+# parents instead. A release change that was not pushed is abandoned.
+start=$(jj log --no-graph -r @ -T change_id)
+start_parents=( ${(f)"$(jj log --no-graph -r 'parents(@)' -T 'change_id ++ "\n"')"} )
+# In a colocated repo, git HEAD is now main@origin, so git-cliff reads the
+# history of main and not of the current work.
 jj new 'main@origin'
+release=$(jj log --no-graph -r @ -T change_id)
+pushed=false
+TRAPEXIT() {
+  # Every subshell, such as a command substitution, runs EXIT traps too.
+  (( ZSH_SUBSHELL == 0 )) || return 0
+  setopt local_options no_err_exit
+  $pushed || jj abandon --quiet $release
+  if jj log --quiet --no-graph -r "present($start)" -T change_id | grep -q .; then
+    jj edit --quiet $start
+  else
+    jj new --quiet $start_parents
+  fi
+}
 
 fail() {
   print -u2 "error: $1"
-  jj abandon @
   exit 1
 }
 
@@ -19,7 +38,6 @@ fail() {
 releasable=$(git cliff --unreleased --context | jq '(.[0].commits // []) | length')
 if (( releasable == 0 )); then
   print "No releasable commits since the last release."
-  jj abandon @
   exit 0
 fi
 
@@ -45,8 +63,10 @@ done
 rm -rf $sdist
 (( $#cabals > 0 )) || fail "cabal sdist found no packages"
 
+# sed writes a new file: sed -i differs between GNU and BSD sed.
 for cabal in $cabals; do
-  sed -i -E "s/^(version:[[:space:]]+).*/\1$next/" $cabal
+  sed -E "s/^(version:[[:space:]]+).*/\1$next/" $cabal > $cabal.new
+  mv $cabal.new $cabal
 done
 
 # A package that depends on another package of the project requires the
@@ -56,7 +76,8 @@ done
 names=( ${${cabals:t}%.cabal} )
 for cabal in $cabals; do
   for name in $names; do
-    sed -i -E "s/(^|[[:space:],])(${name}[[:space:]]+\^>=[[:space:]]*)[0-9.]+/\1\2$next/" $cabal
+    sed -E "s/(^|[[:space:],])(${name}[[:space:]]+\^>=[[:space:]]*)[0-9.]+/\1\2$next/" $cabal > $cabal.new
+    mv $cabal.new $cabal
   done
 done
 
@@ -87,10 +108,21 @@ for cabal in $cabals; do
   mv $changelog.new $changelog
 done
 
+# When the task runs again for the same version, for example after main
+# moved on, it replaces the branch and the commit of the open release PR,
+# and abandons the old commit if nothing was built on it.
 jj describe -m "chore(release): $next"
-jj bookmark create "release-$next" -r @
+old=$(jj log --no-graph -r "present(release-$next)" -T change_id)
+jj bookmark set "release-$next" -r @ --allow-backwards
 jj git push -b "release-$next"
-gh pr create --head "release-$next" --title "chore(release): $next" \
-  --body-file =(awk -v v="$next" '/^## /{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md)
-
-print "Release PR for $next is open."
+pushed=true
+if [[ -n $old && $old != $release ]] && jj log --no-graph -r "$old & heads(all())" -T change_id | grep -q .; then
+  jj abandon --quiet $old
+fi
+if [[ $(gh pr view "release-$next" --json state --jq .state 2>/dev/null) == OPEN ]]; then
+  print "Release PR for $next is updated."
+else
+  gh pr create --head "release-$next" --title "chore(release): $next" \
+    --body-file =(awk -v v="$next" '/^## /{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md)
+  print "Release PR for $next is open."
+fi
