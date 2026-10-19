@@ -1,7 +1,7 @@
 -- | Colours, colour profiles and downsampling.
 --
--- A 'Color' is what you write in a style. It may be adaptive ('LightDark',
--- 'Complete'), so it is only turned into a concrete 'TermColor' when the
+-- A 'Color' is what you write in a style. It may be adaptive ('lightDark',
+-- 'complete'), so it is only turned into a concrete 'TermColor' when the
 -- block is serialised and the terminal's 'ColorProfile' is known.
 --
 -- == Examples

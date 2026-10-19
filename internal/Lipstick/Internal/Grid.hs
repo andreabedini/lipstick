@@ -80,7 +80,7 @@ lineSpans = map toSpan . groupBy ((==) `on` cellAttrs) . lineCells
       c : _ -> Span (cellAttrs c) (T.concat (map cellText grp)) (cellsWidth grp)
       [] -> Span mempty T.empty 0
 
--- | One cluster occupying 'cellWidth' columns.
+-- | One cluster occupying 'Lipstick.Grid.cellWidth' columns.
 data Cell = Cell
   { cellAttrs :: !Attrs
   , cellText :: !Text
