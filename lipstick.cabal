@@ -16,6 +16,7 @@ maintainer:      andrea@bedini.au
 homepage:        https://github.com/andreabedini/lipstick
 bug-reports:     https://github.com/andreabedini/lipstick/issues
 build-type:      Simple
+tested-with:     GHC == 9.10.3 || == 9.12.2 || == 9.14.1
 extra-doc-files:
     CHANGELOG.md
     README.md
@@ -26,6 +27,14 @@ extra-source-files:
 source-repository head
     type:     git
     location: https://github.com/andreabedini/lipstick.git
+
+-- The demo and the screenshot generator are for developing lipstick:
+-- cabal.project switches them on, so that installing the package from
+-- Hackage does not install them.
+flag examples
+    description: Build the example programs
+    default:     False
+    manual:      True
 
 common warnings
     ghc-options: -Wall -Wcompat -Wincomplete-uni-patterns -Wincomplete-record-updates
@@ -73,6 +82,8 @@ library
 
 executable lipstick-demo
     import:           warnings
+    if !flag(examples)
+        buildable: False
     main-is:          Main.hs
     hs-source-dirs:   examples
     build-depends:
@@ -83,6 +94,8 @@ executable lipstick-demo
 
 executable lipstick-screenshots
     import:           warnings
+    if !flag(examples)
+        buildable: False
     main-is:          Screenshots.hs
     other-modules:    Svg
     hs-source-dirs:   examples
