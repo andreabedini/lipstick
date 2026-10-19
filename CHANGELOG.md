@@ -1,6 +1,6 @@
 # Revision history for lipstick
 
-## 0.1.0.0 -- 2026-10-17
+## [0.1.0.0] - 2026-10-17
 
 First version: a port of lipgloss v2.
 

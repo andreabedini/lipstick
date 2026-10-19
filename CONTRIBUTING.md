@@ -41,8 +41,8 @@ The `version:` fields in the `.cabal` files are the only source of the version. 
 The maintainer makes releases.
 
 1. Make sure that `main` is green.
-2. Run `mise run release-pr`. It reads the commits since the last release tag, sets the next version in every `.cabal` file, regenerates `CHANGELOG.md` with [git-cliff](https://git-cliff.org/), and opens a pull request titled `chore(release): VERSION`. If there are no releasable commits, it says so and does nothing.
-3. Review the pull request. To increment `A`, change the version by hand in every `.cabal` file, and change the `CHANGELOG.md` header and the commit description to the same version. Edits to `CHANGELOG.md` are lost at the next release, which regenerates it; wording that must stay goes in `cliff.toml`.
+2. Run `mise run release-pr`. It reads the commits since the last release tag, sets the next version in every `.cabal` file, adds a section for the release to every package's `CHANGELOG.md` with [git-cliff](https://git-cliff.org/), and opens a pull request titled `chore(release): VERSION`. The `CHANGELOG.md` at the top lists every commit and gives the release notes; `lipstick-brick/CHANGELOG.md` lists the commits that change `lipstick-brick/`. A section for the release that is already in a `CHANGELOG.md`, written by hand, is kept with the date of the release. If there are no releasable commits, it says so and does nothing.
+3. Review the pull request. Edit the new sections of `CHANGELOG.md` as you like; the next release keeps them. To increment `A`, change the version by hand in every `.cabal` file, and change the `CHANGELOG.md` headings and the commit description to the same version.
 4. When `ci-ok` passes, merge the pull request with rebase merge.
 5. CI's `release` job sees the release commit on `main`. It publishes a GitHub release with the source distributions of `lipstick` and `lipstick-brick` and their documentation for Hackage (`PACKAGE-VERSION-docs.tar.gz`), their `SHA256SUMS`, and the notes from `CHANGELOG.md`. Publishing creates the tag. Then the `pages` job publishes the documentation of the release to <https://andreabedini.github.io/lipstick/>.
 6. Verify the release:

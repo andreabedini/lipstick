@@ -60,18 +60,37 @@ for cabal in $cabals; do
   done
 done
 
-# CHANGELOG.md at the top is the one the release notes come from. A package
-# in a subdirectory cannot list ../CHANGELOG.md in extra-doc-files, so it gets
-# a copy.
-git cliff --tag "v$next" -o CHANGELOG.md
-for cabal in ${(M)cabals:#*/*}; do
-  cp CHANGELOG.md ${cabal:h}/CHANGELOG.md
+# Every package has a CHANGELOG.md next to its .cabal file. The one at the
+# top lists every commit, and the release notes come from it; the one of a
+# package in a subdirectory lists the commits that change that subdirectory.
+# The task puts the section of the release above the previous one and keeps
+# the rest of the file. A section for the release that is already there, for
+# example written by hand for the first release, is kept with today's date.
+export VERSION=$next TODAY=$(date +%Y-%m-%d)
+for cabal in $cabals; do
+  dir=${cabal:h}
+  changelog=$dir/CHANGELOG.md
+  [[ -f $changelog ]] || fail "$changelog does not exist"
+  paths=()
+  [[ $dir == . ]] || paths=( --include-path "$dir/**" )
+  SECTION=$(git cliff --unreleased --tag "v$next" --strip all $paths)
+  [[ $SECTION == *$'\n### '* ]] ||
+    SECTION+=$'\n\nNo changes other than the versions of the packages it depends on.'
+  export SECTION
+  awk '
+    BEGIN { head = "## [" ENVIRON["VERSION"] "]" }
+    !done && index($0, head) == 1 { print head " - " ENVIRON["TODAY"]; done = 1; next }
+    !done && /^## / { print ENVIRON["SECTION"]; print ""; done = 1 }
+    { print }
+    END { if (!done) { print ""; print ENVIRON["SECTION"] } }
+  ' $changelog > $changelog.new
+  mv $changelog.new $changelog
 done
 
 jj describe -m "chore(release): $next"
 jj bookmark create "release-$next" -r @
 jj git push -b "release-$next"
 gh pr create --head "release-$next" --title "chore(release): $next" \
-  --body-file =(git cliff --unreleased --tag "v$next" --strip all)
+  --body-file =(awk -v v="$next" '/^## /{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md)
 
 print "Release PR for $next is open."
