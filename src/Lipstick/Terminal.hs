@@ -1,10 +1,10 @@
 -- | Detecting what the terminal supports, and printing blocks.
 --
 -- Printing detects the colour profile and the width on every call, which
--- is cheap: blocks are laid out in the terminal's width (or @COLUMNS@, if
--- set), and at their natural width when the output is not a terminal. The
--- background is taken from @COLORFGBG@ when the terminal sets it, and is
--- otherwise assumed dark. To ask the terminal itself, which is slower and
+-- is cheap: blocks are laid out in @COLUMNS@ if it is set, even when the
+-- output is not a terminal, or else in the terminal's width, and otherwise
+-- at their natural width. The background is taken from @COLORFGBG@ when
+-- the terminal sets it, and is otherwise assumed dark. To ask the terminal itself, which is slower and
 -- reads from stdin, detect the environment once with 'detectEnvQuery' and
 -- print with 'hPutBlockWith'.
 --

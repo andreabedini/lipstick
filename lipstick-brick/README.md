@@ -35,4 +35,4 @@ column.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/andreabedini/lipstick/blob/main/lipstick-brick/LICENSE).
