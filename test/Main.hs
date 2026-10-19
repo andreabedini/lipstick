@@ -420,6 +420,10 @@ layerTests =
     "layers"
     [ testCase "canvas fits all layers" $
         plainLines (compose [layer mempty "ab", layer (offset 3 1) "cd"]) @?= ["ab   ", "   cd"]
+    , testCase "maxWidth crops a layer instead of wrapping it" $ do
+        plainLines (compose [layer (maxWidth 5) "hello world"]) @?= ["hello"]
+        plainLines (compose [layer (maxWidth 4) (render (border normalBorder) "ab cd")])
+          @?= ["┌───", "│ab ", "└───"]
     , testCase "later layers are on top" $
         plainLines (compose [layer mempty "aaaa", layer (offset 1 0) "bb"]) @?= ["abba"]
     , testCase "z-index beats list order" $
