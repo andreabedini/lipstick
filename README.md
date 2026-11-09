@@ -342,6 +342,10 @@ only when printing. From the source of layoutz 0.4.0.0:
 The API documentation of the latest release is at
 <https://andreabedini.github.io/lipstick/>.
 
+Each [release](https://github.com/andreabedini/lipstick/releases) also has the
+documentation of every package with a library, as
+`PACKAGE-VERSION-docs.tar.gz`, in the format Hackage takes.
+
 ## Development
 
 See
