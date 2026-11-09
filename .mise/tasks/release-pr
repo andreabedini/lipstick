@@ -12,8 +12,9 @@ jj git fetch
 # parents instead. A release change that was not pushed is abandoned.
 start=$(jj log --no-graph -r @ -T change_id)
 start_parents=( ${(f)"$(jj log --no-graph -r 'parents(@)' -T 'change_id ++ "\n"')"} )
-# In a colocated repo, git HEAD is now main@origin, so git-cliff reads the
-# history of main and not of the current work.
+# Start the release change on main@origin. In a colocated repo, jj then
+# points git HEAD there, so git-cliff reads main's history, not the current
+# work.
 jj new 'main@origin'
 release=$(jj log --no-graph -r @ -T change_id)
 pushed=false
@@ -82,11 +83,12 @@ for cabal in $cabals; do
 done
 
 # Every package has a CHANGELOG.md next to its .cabal file. The one at the
-# top lists every commit, and the release notes come from it; the one of a
-# package in a subdirectory lists the commits that change that subdirectory.
-# The task puts the section of the release above the previous one and keeps
-# the rest of the file. A section for the release that is already there, for
-# example written by hand for the first release, is kept with today's date.
+# top lists every releasable commit, and the release notes come from it; the
+# one of a package in a subdirectory lists the commits that change that
+# subdirectory. The task puts the section of the release above the previous
+# one and keeps the rest of the file. A section for the release that is
+# already there, for example written by hand for the first release, is kept
+# with today's date.
 export VERSION=$next TODAY=$(date +%Y-%m-%d)
 for cabal in $cabals; do
   dir=${cabal:h}

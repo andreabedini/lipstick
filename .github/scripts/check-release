@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Checks a release commit, the head of a release PR or of main:
+# Checks a release commit and the checked-out tree, at the head of a release
+# PR or of main:
 #
 #   check-release COMMIT VERSION BUMPED
 #
-# Its subject is "chore(release): VERSION", every package has VERSION,
-# CHANGELOG.md has a section for it, and VERSION is at least BUMPED, the
-# version that git-cliff calls for with the commits since the last release.
-# A release PR that is behind main, whose branch lacks a feat! merged after
-# `mise run release-pr`, would otherwise release it under too small a
-# version. A version above BUMPED is a hand increment of A.
+# The commit's subject is "chore(release): VERSION"; in the tree, every
+# package has VERSION and CHANGELOG.md has a section for it; and VERSION is
+# at least BUMPED, the version that git-cliff calls for with the commits
+# since the last release.
+# A release PR made before main gained a commit that calls for a bigger bump
+# would otherwise release it under too small a version. A version above
+# BUMPED is allowed: A changes only by hand.
 set -euo pipefail
 
 commit=$1

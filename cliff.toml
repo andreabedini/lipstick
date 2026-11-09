@@ -1,9 +1,4 @@
-# git-cliff ~ configuration file
-# https://git-cliff.org/docs/configuration
-
 [changelog]
-# A Tera template to be rendered for each release in the changelog.
-# See https://keats.github.io/tera/#getting-started
 # .mise/tasks/release-pr renders only the section of the next release and puts
 # it in the CHANGELOG.md files, so there is no header or footer.
 body = """
@@ -19,14 +14,10 @@ body = """
     {% endfor %}
 {% endfor %}\n
 """
-# Remove leading and trailing whitespaces from the changelog's body.
 trim = true
 
 [git]
-# Parse commits according to the conventional commits specification.
-# See https://www.conventionalcommits.org
 conventional_commits = true
-# Exclude commits that do not match the conventional commits specification.
 filter_unconventional = true
 # Exclude commits that no commit parser below assigns to a group.
 filter_commits = true
@@ -44,17 +35,14 @@ commit_parsers = [
   { field = "breaking", pattern = "true", group = "<!-- 1 -->Changed" },
   { message = "^(docs|ci|test|refactor|build|chore|style|revert)", skip = true },
 ]
-# Order releases topologically instead of chronologically.
-topo_order = false
-# Order of commits in each group/release within the changelog.
-# Allowed values: newest, oldest
 sort_commits = "oldest"
 
 # .mise/tasks/release-pr takes the next version from `git cliff
 # --bumped-version`. With versions A.B.C.D, git-cliff bumps the last three
 # components as SemVer would: a breaking change bumps B, feat bumps C, fix
-# and perf bump D. A changes only by hand. These are git-cliff's defaults,
-# set here so that the 0.x versions are not treated specially.
+# and perf bump D. A changes only by hand. Both settings are git-cliff's
+# defaults, spelt out because turning either off would make versions with
+# B = 0 bump less.
 [bump]
 features_always_bump_minor = true
 breaking_always_bump_major = true

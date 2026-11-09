@@ -1,15 +1,10 @@
 name: CI
 
-# build compiles the project once per target and GHC and runs its test
-# suites; sdist makes the source distribution of every package in
-# cabal.project; docs makes the Haddock documentation for Hackage and for
-# GitHub Pages; dist checks the versions of the source distributions and the
-# documentation tarballs, and uploads them with SHA256SUMS as one artifact;
-# commits checks the commit messages of a PR, and the release commit of a
-# release PR; ci-ok is the one check that the ruleset requires; release
-# publishes dist when the head of main is a release commit, made by `mise
-# run release-pr`; pages then publishes the documentation to GitHub Pages.
-# The project publishes no executables.
+# build, sdist, docs and dist run on every PR, push to main and manual run;
+# commits runs on PRs; ci-ok is the one check that the ruleset requires.
+# When the head of main is a release commit, made by `mise run release-pr`,
+# release publishes dist and pages deploys the documentation. The project
+# publishes no executables.
 #
 # A manual run (Actions > CI > Run workflow, or `gh workflow run ci.yml
 # --ref BRANCH`) makes every artifact of a release, in dist, without
@@ -33,6 +28,8 @@ env:
   CABAL_VERSION: 3.18.1.0
   # The documentation comes from this GHC, normally the newest of
   # matrix.ghc. cabal sdist uses none, but haskell-actions/setup installs it.
+  # docs restores the cabal store of the ubuntu-24.04 build with this GHC,
+  # so the matrix should keep one.
   RELEASE_GHC: 9.14.1
 
 jobs:
@@ -44,10 +41,10 @@ jobs:
       fail-fast: false
       matrix:
         # Every platform with GHC 9.12.2, and the other supported compilers
-        # on Linux. Images are pinned rather than *-latest, which move to new
-        # releases (ubuntu-latest moves to Ubuntu 26.04 from 2026-10-19,
-        # actions/runner-images#14748). The image is also in the cache key,
-        # so a cabal store built on one image is not restored on another.
+        # on Linux. Images are pinned rather than *-latest, so a new OS
+        # version arrives only by editing this file. The image is also in the
+        # cache key, so a cabal store built on one image is not restored on
+        # another.
         include:
           - target: x86_64-linux
             build-runner: ubuntu-24.04
@@ -66,8 +63,8 @@ jobs:
             ghc: 9.14.1
 
     steps:
-      # Keep LF line endings on Windows: the tests read data files from the
-      # checkout.
+      # Check out the same bytes as on the other platforms: the Windows image
+      # turns core.autocrlf on, which would give text files CRLF line endings.
       - name: Check out with LF line endings
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
@@ -168,14 +165,13 @@ jobs:
           if-no-files-found: error
 
   # The documentation of every package with a library, built with
-  # RELEASE_GHC: a tarball for Hackage (`cabal upload --documentation`),
-  # which the release publishes, and the documentation of the whole project
-  # from cabal haddock-project, which the pages job publishes. Both link to
-  # the documentation of the dependencies on Hackage. A package without a
-  # library has no documentation.
+  # RELEASE_GHC: a tarball for Hackage, which the release attaches for a
+  # later `cabal upload --documentation`, and the documentation of the whole
+  # project from cabal haddock-project, which the pages job deploys. Both
+  # link to the documentation of the dependencies on Hackage. A package
+  # without a library has no documentation.
   docs:
     name: docs
-    # The image of the x86_64-linux builds, whose cabal store it restores.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -189,7 +185,8 @@ jobs:
       - name: Plan
         run: cabal build all --dry-run
 
-      # The x86_64-linux build with RELEASE_GHC caches the same dependencies.
+      # The ubuntu-24.04 build with RELEASE_GHC saves these dependencies and
+      # the tests'. Its plan differs, so only the restore-keys prefix matches.
       - name: Restore cabal store
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -281,16 +278,16 @@ jobs:
             echo "::error::A release PR has one chore(release) commit, its last"
             exit 1
           fi
-          # The version of the packages, which a hand increment of A changes
-          # without renaming the branch.
+          # Take the version from a .cabal file, not the branch name: a hand
+          # increment of A changes the files but not the branch.
           version=$(sed -n -E 's/^version:[[:space:]]+//p' "$(git ls-files '*.cabal' | head -n 1)")
           bash .github/scripts/check-release "$HEAD_SHA" "$version" "$BUMPED"
 
-  # Everything that a release publishes, checked, in one artifact "dist":
-  # the source distributions,
-  # the documentation tarballs and SHA256SUMS. It runs on every event: a PR, or a
-  # manual run (workflow_dispatch, on any branch), gets the same files as a
-  # release, and a version mismatch fails before the release commit lands.
+  # Everything that a release publishes, in one artifact "dist": the source
+  # distributions, the documentation tarballs and SHA256SUMS, after checking
+  # that they all have one version. It runs on every event, so a PR or a
+  # manual run gets the same files as a release, and a version mismatch
+  # fails before the release commit lands.
   dist:
     name: dist
     needs: [build, sdist, docs]
@@ -310,8 +307,8 @@ jobs:
           name: docs
           path: docs
 
-      # Every package has the same version, the version of the release, and
-      # so does everything else.
+      # All packages have one version, and every documentation tarball is
+      # for it.
       - name: Check versions
         id: check
         run: |
@@ -346,7 +343,8 @@ jobs:
   # The one check that the ruleset requires: whatever the matrix becomes, it
   # fails if any job it needs failed or was cancelled. Without always(), a
   # failed job would make it skipped, and GitHub treats a skipped required
-  # check as passed. commits is skipped on pushes to main, which is fine.
+  # check as passed. commits runs only on PRs; a skipped need does not fail
+  # ci-ok.
   ci-ok:
     name: ci-ok
     if: always()
@@ -453,6 +451,7 @@ jobs:
   pages:
     name: pages
     needs: release
+    # As in release: the implicit success() would see commits skipped.
     if: ${{ !cancelled() && needs.release.result == 'success' }}
     runs-on: ubuntu-24.04
     environment:
