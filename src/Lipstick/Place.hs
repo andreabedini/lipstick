@@ -63,7 +63,7 @@ whitespaceChars t = fieldMod (\p -> p {placeChars = t})
 
 -- | Place a block in an area, at the position set by 'align' and
 -- 'valign'. The area is as wide as the space it is laid out in, or 'width'
--- columns if set and there is room for them, and at least 'height' rows
+-- columns if set and there is room for them, and at least 'height' lines
 -- if set. A block wider than the area is laid out in its width, so its
 -- text wraps; a block taller than the area makes it taller.
 --

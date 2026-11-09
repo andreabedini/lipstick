@@ -1,10 +1,10 @@
 -- | Compositing: blocks stacked on top of each other at any position.
 --
--- Layers are drawn from the lowest 'zIndex' up; layers with the same
--- 'zIndex' are drawn in list order, children after their parent. A layer
--- hides what is below it, unless it is 'transparent'. Where a layer covers
--- half of a wide character, the other half becomes a space, so columns
--- never shift.
+-- Layers are drawn from the lowest z-index up (a sublayer's 'zIndex'
+-- adds to its parent's); layers with the same z-index are drawn in list
+-- order, each followed by its sublayers. A layer hides what is below it,
+-- unless it is 'transparent'. Where a layer covers half of a wide
+-- character, the other half becomes a space, so columns never shift.
 --
 -- == Examples
 --
@@ -111,7 +111,7 @@ offset x y = fieldMod (\l -> l {layerX = x, layerY = y})
 zIndex :: Int -> Mod Layer
 zIndex z = fieldMod (\l -> l {layerZ = z})
 
--- | Name the layer, for 'layerAt'.
+-- | Name the layer, for 'layerAt', 'layerHit' and 'findLayer'.
 layerId :: Text -> Mod Layer
 layerId t = fieldMod (\l -> l {layerName = Just t})
 
@@ -135,8 +135,10 @@ flatten = sortOn layerZ . concatMap (go 0 0 0)
 -- of a wide cluster starting to the left.
 data Slot = Start !Cell | Continued
 
--- | Draw layers onto a canvas just big enough for all of them, or as wide
--- as the space it is laid out in if a layer grows.
+-- | Draw layers onto a canvas from column 0, row 0 to the far edges of
+-- the layers, or as wide as the space it is laid out in if a layer grows.
+-- In less width, each layer is laid out in the columns to the right of its
+-- offset, and what still does not fit is cut off.
 compose :: [Layer] -> Block
 compose layers = Block $ \ctx -> Measured (canvasRequest (measured ctx layers)) $ \(Assign w _) ->
   let g = fitWidth w (canvas w (drawLayers w (measured ctx layers)))
@@ -201,7 +203,9 @@ canvas w drawn = fromCellLines [row r | r <- [0 .. h - 1]]
               _ -> blank : go (c + 1)
     blank = Cell mempty (T.singleton ' ') 1 False
 
--- | Draw one block on top of another, at a column and row.
+-- | @overlay x y top base@ draws @top@ over @base@, @x@ columns right of
+-- and @y@ rows below its top-left corner. The result grows to fit @top@
+-- where it reaches past @base@.
 overlay :: Int -> Int -> Block -> Block -> Block
 overlay x y top base = compose [layer mempty base, layer (offset x y) top]
 
@@ -305,6 +309,7 @@ layerHit avail x y layers =
     , contains x y (bounds d)
     ]
 
--- | Where the layer with an id is drawn (the topmost, if several share it).
+-- | Where the layer with a given name is drawn (the topmost, if several
+-- share it), laid out as for 'layerAt'.
 findLayer :: Maybe Int -> Text -> [Layer] -> Maybe Rect
 findLayer avail name layers = listToMaybe [bounds d | d@(l, _) <- topmostFirst avail layers, layerName l == Just name]

@@ -9,6 +9,11 @@
 -- modifier on its own; VS15 does not change the width. A pair of regional
 -- indicators (a flag) is two.
 --
+-- 'textWidth' adds up the widths of all the clusters, and newlines and
+-- tabs are controls, so they take no columns: the width of @"ab\\ncd"@ is
+-- 4, not the width of its widest line, and a tab is 0 here although a
+-- block shows it as spaces (see 'Lipstick.Style.tabWidth').
+--
 -- The tables are generated from the Unicode Character Database by
 -- @scripts/GenUnicodeTable.hs@; see 'unicodeVersion'.
 --
@@ -22,6 +27,8 @@
 -- 2
 -- >>> textWidth "e\x301"
 -- 1
+-- >>> textWidth "ab\ncd"
+-- 4
 -- >>> map snd (clusters "a🇦🇺e\x301")
 -- [1,2,1]
 -- >>> (charWidth 'a', charWidth '你', charWidth '\x301')

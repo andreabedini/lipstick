@@ -120,8 +120,12 @@ import Lipstick.Width (textWidth)
 -- >>> import Lipstick
 -- >>> import Data.Text qualified as T
 
--- | Where a cell is: in the header, or in a body row (counting from 0).
-data TableCell = HeaderCell !Int | BodyCell !Int !Int
+-- | Where a cell is. Rows and columns count from 0.
+data TableCell
+  = -- | A header cell, by column.
+    HeaderCell !Int
+  | -- | A body cell, by row and column.
+    BodyCell !Int !Int
   deriving (Eq, Show)
 
 -- | The body row of a cell, or 'Nothing' for the header.
@@ -139,6 +143,22 @@ cellColumn = \case
 -- | The settings of a 'table': its border (rounded by default), the rules
 -- under the header and between columns and rows, its size, wrapping and
 -- cell styles. Change them with the @t'Mod' t'Table'@ passed to 'table'.
+--
+-- Without a 'width', columns are as wide as their cells need, and shrink
+-- (wrapping their text) when the table is laid out in less space: widest
+-- first, but not below their longest word while another column can still
+-- wrap; with 'fillWidth', they grow to fill it. 'width' is the total width
+-- of the table: columns shrink or grow to fit it.
+--
+-- 'height' is the least number of lines the table takes: lines of empty
+-- cells are added below the body to reach it. 'maxHeight' is the most:
+-- body rows that do not fit are left out, with a row of ellipses in their
+-- place where there is room for it, and 'yOffset' sets the first row
+-- shown.
+--
+-- With 'noWrap', set on the table or on a style around it, body cells
+-- that are too wide are cut with an ellipsis; 'unsetNoWrap' makes them
+-- wrap again. Header cells are always cut, never wrapped.
 data Table = Table
   { tableBorder :: !BorderProps
   , tableSize :: !Size
@@ -154,22 +174,9 @@ data Table = Table
 instance HasBorder Table where
   overBorder f t = t {tableBorder = f (tableBorder t)}
 
--- | Without a 'width', columns are as wide as their cells need, and shrink
--- (wrapping their text) when the table is laid out in less space: widest
--- first, but not below their longest word while another column can still
--- wrap; with 'fillWidth', they grow to fill it. 'width' is the total width
--- of the table: columns shrink or grow to fit it. 'height' is the least
--- number of lines the table takes: rows of empty cells are added after the
--- body to reach it.
---
--- 'maxHeight' is the most lines the table takes: rather than being cut
--- off, body rows that do not fit are replaced by a row of ellipses,
--- starting from the row set by 'yOffset'.
 instance HasSize Table where
   overSize f t = t {tableSize = f (tableSize t)}
 
--- | With 'noWrap', body cells that are too wide are cut with an ellipsis.
--- Header cells are always cut, never wrapped.
 instance HasWrap Table where
   overWrap f t = t {tableWrap = f (tableWrap t)}
 
@@ -225,7 +232,7 @@ fitContent = fieldMod (\t -> t {tableFitContent = True})
 
 -- | A table with a header row (none if empty) and body rows. Short rows
 -- are padded with empty cells. Its columns fit the width the table is
--- laid out in (see 'HasSize').
+-- laid out in (see t'Table').
 table :: Mod Table -> [Block] -> [[Block]] -> Block
 table m headers rows = Block $ \ctx ->
   let (req, run) = tableLayout ctx m headers rows
@@ -303,9 +310,7 @@ tableLayout ctx m headers rows
       Nothing -> (smallest, full)
     req = Request (capW lo) (capW hi) weight (max 0 <$> propMaxWidth props) stretch False
     -- Columns grow to a set width (unless they fit their content) or when
-    -- the table grows. They shrink widest first, but not below their
-    -- longest word while another column can still wrap; then further,
-    -- widest first, down to one column.
+    -- the table grows.
     columnWeight = if tableFitContent t || (not (isJust wSet) && weight == 0) then 0 else 1
 
     run w = (gridTo, gridHeight (gridTo 0), shownRange)

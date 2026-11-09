@@ -4,9 +4,13 @@
 -- is cheap: blocks are laid out in @COLUMNS@ if it is set, even when the
 -- output is not a terminal, or else in the terminal's width, and otherwise
 -- at their natural width. The background is taken from @COLORFGBG@ when
--- the terminal sets it, and is otherwise assumed dark. To ask the terminal itself, which is slower and
--- reads from stdin, detect the environment once with 'detectEnvQuery' and
--- print with 'hPutBlockWith'.
+-- the terminal sets it, and is otherwise assumed dark. To ask the
+-- terminal itself, which is slower and reads from stdin, detect the
+-- environment once with 'detectEnvQuery' and print with 'hPutBlockWith'.
+--
+-- The output is always UTF-8, whatever the handle's encoding: terminals
+-- expect it, and a locale such as @C@ (common in containers and cron jobs)
+-- would otherwise make the handle reject box-drawing characters.
 --
 -- == Examples
 --
@@ -21,6 +25,8 @@
 -- Asking the terminal for its background once, and printing several
 -- blocks for that environment:
 --
+-- > {-# LANGUAGE OverloadedStrings #-}
+-- > import Lipstick
 -- > import System.IO (stdout)
 -- >
 -- > main :: IO ()
@@ -95,8 +101,9 @@ import System.Info (os)
 putBlock :: Block -> IO ()
 putBlock = hPutBlock stdout
 
--- | Print a block to a handle, followed by a newline, downsampling colours
--- to what the handle supports.
+-- | Print a block to a handle, followed by a newline, laid out in the
+-- handle's width and with colours reduced to its profile (see
+-- 'detectEnv').
 hPutBlock :: Handle -> Block -> IO ()
 hPutBlock h b = do
   env <- detectEnv h
@@ -105,10 +112,6 @@ hPutBlock h b = do
 -- | Print a block to a handle, followed by a newline, for a known
 -- environment. Lines are written one at a time, so the whole output is
 -- never held as one text.
---
--- The output is always UTF-8, whatever the handle's encoding: terminals
--- expect it, and a locale such as @C@ (common in containers and cron jobs)
--- would otherwise make the handle reject box-drawing characters.
 hPutBlockWith :: RenderEnv -> Handle -> Block -> IO ()
 hPutBlockWith env h b = case toAnsiLines env b of
   [] -> Utf8.hPutStrLn h mempty
@@ -148,8 +151,9 @@ widthFromEnv vars = do
     then Just (read v)
     else Nothing
 
--- | Like 'detectEnv', but first asks the terminal for its background
--- colour (see 'queryDarkBackground'). Call it once and keep the result.
+-- | Like 'detectEnv', but asks the terminal for its background colour (see
+-- 'queryDarkBackground'), falling back to @COLORFGBG@ when there is no
+-- answer. It can take half a second, so call it once and keep the result.
 detectEnvQuery :: Handle -> IO RenderEnv
 detectEnvQuery h = do
   env <- detectEnv h
@@ -159,8 +163,8 @@ detectEnvQuery h = do
 -- | The colour profile of a handle. On Windows this also switches on ANSI
 -- processing in the console, if needed.
 --
--- @NO_COLOR@ removes colours; @CLICOLOR_FORCE@ keeps them even when the
--- handle is not a terminal.
+-- @NO_COLOR@ removes colours; @CLICOLOR_FORCE@, set to anything but @0@,
+-- keeps them even when the handle is not a terminal.
 detectProfile :: Handle -> IO ColorProfile
 detectProfile h = do
   supported <- hNowSupportsANSI h
@@ -191,7 +195,8 @@ profileFromEnv supported vars
     trueColorTerms = ["alacritty", "contour", "foot", "kitty", "rio", "wezterm", "xterm-ghostty", "xterm-kitty"]
 
 -- | Whether the background is dark according to @COLORFGBG@, which some
--- terminals (rxvt, Konsole, …) set to @"fg;bg"@ palette indices.
+-- terminals (rxvt, Konsole, …) set to @"fg;bg"@ palette indices; 'Nothing'
+-- when it is not set or the background is not a number.
 backgroundFromEnv :: [(String, String)] -> Maybe Bool
 backgroundFromEnv vars = do
   v <- lookup "COLORFGBG" vars
@@ -200,8 +205,8 @@ backgroundFromEnv vars = do
     then let n = read bgField :: Int in Just (n <= 6 || n == 8)
     else Nothing
 
--- | Ask the terminal behind a handle for its background colour, and
--- whether it is dark. The reply is read from stdin.
+-- | Whether the background of the terminal behind a handle is dark, by
+-- asking the terminal for its colour. The reply is read from stdin.
 --
 -- 'Nothing' when stdin or the handle is not a terminal, when the terminal
 -- does not answer within half a second, and on Windows, where the query

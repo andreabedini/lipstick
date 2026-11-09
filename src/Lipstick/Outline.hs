@@ -3,8 +3,9 @@
 -- | Lists and trees.
 --
 -- Both are outlines: items with an enumerator (a bullet, a number, a tree
--- branch) and nested items indented below them. Trees have a root and use
--- tree branches by default; lists have no root and use bullets.
+-- branch) and nested items indented below them. A 'tree' has a root;
+-- 'forest', 'list' and 'nestedList' do not. By default 'tree' and 'forest'
+-- use tree branches, 'list' and 'nestedList' bullets.
 --
 -- Items are blocks, so anything can go in an outline, tables included.
 --
@@ -117,8 +118,9 @@ import Lipstick.Style (Style, frame, render)
 -- $setup
 -- >>> import Lipstick
 
--- | How items are marked. Make one with 'markers', and change its fields
--- with record update syntax:
+-- | How items are marked. Markers of different widths at one level are
+-- right-aligned to the widest. Make one with 'markers', and change its
+-- fields with record update syntax:
 --
 -- >>> let arrows = (markers (\p -> if isLast p then "└> " else "├> ")) {enumIndent = \p -> Just (if isLast p then "   " else "│  ")}
 -- >>> putBlock (tree (enumerator arrows) (Node "root" [Node "a" [Node "a.1" []], Node "b" []]))
@@ -131,11 +133,12 @@ data Enumerator = Enumerator
   -- ^ the marker for an item
   , enumIndent :: ItemPos -> Maybe Text
   -- ^ what goes before the item's further lines and its children;
-  -- 'Nothing' for spaces as wide as the marker
+  -- 'Nothing' for spaces as wide as the widest marker at the item's level
   }
 
 -- | Where an item is: its depth (0 for the top level), its index among its
--- siblings, and how many siblings there are.
+-- siblings (from 0), and how many siblings there are, itself included. At
+-- the top level, only the items that 'itemOffset' shows count.
 data ItemPos = ItemPos
   { itemDepth :: !Int
   , itemIndex :: !Int
@@ -147,6 +150,13 @@ data ItemPos = ItemPos
 -- styles of the root, items, enumerators and indentation, its size, and
 -- the items it shows. Change them with the @t'Mod' t'Outline'@ passed to
 -- 'tree', 'forest', 'list' or 'nestedList'.
+--
+-- Items are laid out in the width left after their indentation and
+-- enumerator, so their text wraps to fit. 'width' is the width of the
+-- outline when there is room for it, as for a style: items wrap to fit it,
+-- and every line is padded to it with the background of its item's style.
+-- 'fillWidth' pads to the width the outline is given, and 'height' pads
+-- with blank lines up to that many.
 data Outline = Outline
   { outEnumerator :: Enumerator
   , outIndenter :: Maybe (ItemPos -> Text)
@@ -158,12 +168,6 @@ data Outline = Outline
   , outOffset :: (Int, Int)
   }
 
--- | Items are laid out in the width left after their indentation and
--- enumerator, so their text wraps to fit. 'width' is the width of the
--- outline when there is room for it, as for a style: items wrap to fit it,
--- and every line is padded to it with the background of its item's style.
--- 'fillWidth' pads to the width the outline is given, and 'height' pads
--- with blank lines up to that many.
 instance HasSize Outline where
   overSize f o = o {outSize = f (outSize o)}
 
@@ -183,21 +187,21 @@ treeDefaults =
     }
 listDefaults = treeDefaults {outEnumerator = bullet}
 
--- | A tree: the root, then its children.
+-- | A tree: the root, then its children, with tree branches by default.
 tree :: Mod Outline -> Tree Block -> Block
 tree m (Node root kids) =
   let (o, props) = runMod m treeDefaults
    in outline o props $ \ctx -> Entry [] [] [] (fillOf (outRootStyle o)) (frame (outRootStyle o) root) : items ctx o 0 [] kids
 
--- | Trees without a common root, with tree branches.
+-- | Trees without a common root, with tree branches by default.
 forest :: Mod Outline -> Forest Block -> Block
 forest m kids = let (o, props) = runMod m treeDefaults in outline o props (\ctx -> items ctx o 0 [] kids)
 
--- | A list of items, with bullets.
+-- | A list of items, with bullets by default.
 list :: Mod Outline -> [Block] -> Block
 list m = nestedList m . map (`Node` [])
 
--- | A list whose items can have nested items, with bullets.
+-- | A list whose items can have nested items, with bullets by default.
 nestedList :: Mod Outline -> Forest Block -> Block
 nestedList m kids = let (o, props) = runMod m listDefaults in outline o props (\ctx -> items ctx o 0 [] kids)
 
@@ -229,8 +233,6 @@ outlineNode :: Outline -> Props -> [(Entry, Measured)] -> Measured
 outlineNode o props entries = Measured req run
   where
     Size wSet hSet weight stretch = outSize o
-    -- With a width, that is the width when there is room for it, as for a
-    -- style; items wrap to fit.
     natural = fromMaybe (maximum (0 : [prefixWidth e + reqMax (blockRequest n) | (e, n) <- entries])) wSet
     smallest = fromMaybe (maximum (0 : [prefixWidth e + reqMin (blockRequest n) | (e, n) <- entries])) wSet
     capW x = maybe x (min x . max 0) (propMaxWidth props)
@@ -275,7 +277,7 @@ items ctx o depth outer kids0 = concat (zipWith3 item [0 ..] markerCells kids)
     markerW = maximum (0 : map cellsWidth markerCells)
 
     item i mk (Node b children) =
-      let -- Alignment space keeps the enumerator's background, as lipgloss.
+      let -- Alignment space keeps the enumerator's background, as in lipgloss.
           markerRight = alignCells (fillOf (enumStyle i)) right markerW mk
           -- Without indentation text, spaces that make the indentation as
           -- wide as the enumerator once the style adds its padding and margins.
@@ -317,8 +319,9 @@ indenterStyle m = indenterStyleWith (const m)
 indenterStyleWith :: (ItemPos -> Mod Style) -> Mod Outline
 indenterStyleWith f = fieldMod (\o -> o {outIndentStyle = Just (\p -> maybe mempty ($ p) (outIndentStyle o) <> f p)})
 
--- | Show only part of the top-level items: skip @start@ items at the
--- beginning and @end@ at the end. Enumerators count from the first shown.
+-- | @itemOffset start end@ shows only part of the top-level items, leaving
+-- out @start@ at the beginning and @end@ at the end. Enumerators and
+-- 'ItemPos' count only the items shown.
 itemOffset :: Int -> Int -> Mod Outline
 itemOffset start end = fieldMod (\o -> o {outOffset = (max 0 start, max 0 end)})
 
@@ -369,7 +372,7 @@ branches lastBranch =
     }
 
 -- | An enumerator with these markers, and further lines and children
--- indented by spaces as wide as the marker.
+-- indented by spaces as wide as the widest marker at their level.
 --
 -- >>> putBlock (list (enumerator (markers (\p -> if isLast p then "> " else "- "))) ["a", "b", "c"])
 -- - a
@@ -396,7 +399,7 @@ asterisk = constant "* "
 numbered :: (Int -> Text) -> Enumerator
 numbered f = markers (\p -> f (itemIndex p + 1) <> ". ")
 
--- | @1. @, @2. @, … (numbers are right-aligned)
+-- | @1. @, @2. @, …
 arabic :: Enumerator
 arabic = numbered (T.pack . show)
 

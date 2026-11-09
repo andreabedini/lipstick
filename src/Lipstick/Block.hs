@@ -119,7 +119,8 @@ import Lipstick.Internal.Mod (Mod, Props (..), propsOf, runMod)
 -- $setup
 -- >>> import Lipstick
 
--- | The natural width of a block: as wide as it is with nothing wrapped.
+-- | The natural width of a block: the 'Lipstick.Mod.width' of a box that
+-- has one, or else as wide as it is with nothing wrapped.
 blockWidth :: Block -> Int
 blockWidth = reqMax . blockRequest . measure
 
@@ -127,10 +128,9 @@ blockWidth = reqMax . blockRequest . measure
 blockHeight :: Block -> Int
 blockHeight b = snd (blockLayout (measure b) (Assign (blockWidth b) 0))
 
--- | The narrowest a block can be laid out without breaking words, or the
--- 'Lipstick.Mod.width' it is given: a box with a width shrinks below it
--- only when there is no room, and counts it as its smallest when width is
--- shared out.
+-- | The least width a block gets when width is shared out: the
+-- 'Lipstick.Mod.width' of a box that has one, or else the narrowest it can
+-- be without breaking a word. Given less, it still shrinks.
 blockMinWidth :: Block -> Int
 blockMinWidth = reqMin . blockRequest . measure
 
@@ -157,11 +157,12 @@ fromInline = textBlock
 styled :: Mod Inline -> Text -> Inline
 styled m t = Inline [(propAttrs (snd (runMod m mempty)), t)]
 
--- | Place blocks side by side. The width is shared out with spare columns
--- going to blocks that 'Lipstick.Mod.grow', and the widest shrinking first
--- when there is not enough. The position aligns shorter blocks vertically
--- ('top', 'center', 'bottom'); blocks that 'Lipstick.Mod.stretchHeight'
--- grow to the tallest instead.
+-- | Place blocks side by side. Spare columns go to blocks that
+-- 'Lipstick.Mod.grow'; when there are too few columns, the widest blocks
+-- shrink first, and what does not fit even at one column each is cut off
+-- on the right. The position aligns shorter blocks vertically ('top',
+-- 'center', 'bottom'); blocks that 'Lipstick.Mod.stretchHeight' take the
+-- row's height instead.
 joinHorizontal :: Position -> [Block] -> Block
 joinHorizontal p bs = Block $ \ctx ->
   let ns = map (measureIn ctx) bs
@@ -191,8 +192,8 @@ rowNode p ns rs = Measured req run
         rowH = if reqStretch req then max h natural else natural
 
 -- | Stack blocks. Each takes as much of the column's width as it can use
--- (all of it if it grows without a limit); the position aligns those horizontally ('left',
--- 'center', 'right').
+-- (all of it if it grows without a limit), and the position aligns them
+-- horizontally ('left', 'center', 'right').
 joinVertical :: Position -> [Block] -> Block
 joinVertical p bs = Block $ \ctx ->
   let ns = map (measureIn ctx) bs
@@ -224,10 +225,11 @@ vcat :: [Block] -> Block
 vcat = joinVertical left
 
 -- | Add attributes to ranges of display columns @[start, end)@, counted
--- across the text with newlines taking no columns. A tab counts as four
--- columns, the default 'Lipstick.Style.tabWidth': where the text ends up,
--- and so its tab width, is not known yet. The range attributes go on top
--- of the text's own.
+-- from the start of the text and continuing across lines (a newline takes
+-- no columns); a cluster is styled when its first column is in a range.
+-- A tab counts as four columns, the default 'Lipstick.Style.tabWidth':
+-- where the text ends up, and so its tab width, is not known yet. The
+-- range attributes go on top of the text's own.
 --
 -- >>> toAnsi defaultRenderEnv (fromInline (styleRanges [(0, 3, bold <> fg red)] "foobar"))
 -- "\ESC[0;1;31mfoo\ESC[0mbar"
