@@ -26,7 +26,7 @@ main =
           (V.imageWidth img, V.imageHeight img) @?= (blockWidth b, blockHeight b)
       , testCase "zero-width blocks are empty" $
           blockImage defaultRenderEnv (render (paddingTop 2) "") @?= V.emptyImage
-      , testCase "attributes" $ do
+      , testCase "bold, colours and links become vty attributes" $ do
           let img = blockImage defaultRenderEnv (render (bold <> fg red <> bg "#102030" <> link "https://x.y") "a")
               expected =
                 V.defAttr

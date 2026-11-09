@@ -57,7 +57,6 @@ main = do
 plainLines :: Block -> [Text]
 plainLines = T.lines . renderPlain
 
--- | Blocks are equal when they lay out the same at their natural width.
 -- | An environment, field by field.
 renderEnv :: ColorProfile -> Bool -> Maybe Int -> RenderEnv
 renderEnv p dark w = defaultRenderEnv {envProfile = p, envDarkBackground = dark, envWidth = w}
@@ -65,6 +64,7 @@ renderEnv p dark w = defaultRenderEnv {envProfile = p, envDarkBackground = dark,
 rectOf :: Rect -> (Int, Int, Int, Int)
 rectOf r = (rectX r, rectY r, rectWidth r, rectHeight r)
 
+-- | Blocks are equal when they lay out the same at their natural width.
 (@?~) :: Block -> Block -> Assertion
 a @?~ b = layout Nothing a @?= layout Nothing b
 
@@ -89,6 +89,7 @@ widthTests =
         textWidth "⌚\xFE0E" @?= 2
         textWidth "😀\xFE0E" @?= 2
         textWidth "\x2764\xFE0E" @?= 1
+    -- lipgloss measures these by their first character; see the README.
     , testCase "skin tone modifiers are wide and make an emoji wide" $ do
         map textWidth ["\x261D\x1F3FB", "\x270C\x1F3FD", "👍\x1F3FB", "\x1F3FB", "\x1F3FB\x1F3FF"] @?= [2, 2, 2, 2, 2]
         blockWidth (render (border normalBorder) "\x1F3FBx") @?= 5
@@ -485,7 +486,6 @@ layerTests =
   where
     withWidth' ls w = [l <> T.replicate (w - textWidth l) " " | l <- ls]
 
--- | Text attributes and cropping are common to every thing.
 commonPropsTests :: TestTree
 commonPropsTests =
   testGroup
@@ -541,6 +541,9 @@ commonPropsTests =
   where
     besides a b = hcat [a, b]
 
+-- Features ported from lipgloss v2. lipstick does not aim to match it
+-- (README, "How lipstick differs from lipgloss"): these tests pin lipstick's
+-- rules.
 styleParityTests :: TestTree
 styleParityTests =
   testGroup
@@ -672,8 +675,8 @@ tableParityTests =
         visibleRows Nothing mempty ["N"] [] @?= Nothing
     , testCase "row rules count towards the maxHeight" $
         plainLines (table (maxHeight 8 <> rowRules True <> border asciiBorder) [] numbered)
-          -- 6 lines for rows: two rows, a rule, a rule and the overflow row;
-          -- a third row would need 7.
+          -- maxHeight 8 leaves 6 lines inside the border. Two rows, their
+          -- rules and the overflow row take 5; a third row would need 7.
           @?= ["+-+---+", "|0|row|", "+-+---+", "|1|row|", "+-+---+", "|…|…  |", "+-+---+"]
     , testCase "too small for any row" $ do
         visibleRows Nothing (maxHeight 3) ["N"] numbered @?= Nothing
@@ -764,7 +767,7 @@ renderTests =
           @?= ["the quick ", "brown fox "]
     , testCase "long words are broken" $
         plainLines (render (width 4) "abcdefghij") @?= ["abcd", "efgh", "ij  "]
-    , testCase "center alignment" $
+    , testCase "centre alignment" $
         plainLines (render (width 7 <> align center) "abc") @?= ["  abc  "]
     , testCase "right alignment" $
         plainLines (render (width 5 <> align right) "ab\nabc") @?= ["   ab", "  abc"]
