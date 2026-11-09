@@ -378,14 +378,14 @@ blend n stops = case stops of
 clamp01 :: Double -> Double
 clamp01 = max 0 . min 1
 
--- | Adaptive colours are taken in their true-colour, dark-background form.
+-- | A concrete colour in OkLab. Callers pick the concrete colours out of an
+-- adaptive one first, with 'mapConcrete' or 'variant'.
 toOkLab :: Color -> OkLab
 toOkLab c = case c of
-  LightDark _ d -> toOkLab d
-  Complete tc _ _ -> toOkLab tc
   RGB r g b -> fromRGB r g b
   Color256 n -> let (r, g, b) = termColorRGB (TC256 n) in fromRGB r g b
   Color16 n -> let (r, g, b) = termColorRGB (TC16 n) in fromRGB r g b
+  _ -> error "Lipstick.Internal.Color.toOkLab: an adaptive colour"
   where
     fromRGB r g b =
       let lr = linear r
