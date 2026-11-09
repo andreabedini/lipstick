@@ -240,9 +240,6 @@ data Box = Box
 defBox :: Box
 defBox = Box (uniformSides 0) (uniformSides 0) Nothing ' ' ' '
 
--- | A border is drawn when its characters are set or any side is switched
--- on explicitly. Sides left as 'Nothing' are drawn only when the
--- characters are set.
 data BorderProps = BorderProps
   { borderChars :: !(Maybe Border)
   , borderSides :: !(Sides (Maybe Bool))
@@ -251,7 +248,7 @@ data BorderProps = BorderProps
   , borderFgStops :: ![Color]
   -- ^ when not empty, a gradient that replaces 'borderFgColors'
   , borderFgOffset :: !Int
-  -- ^ how far the gradient is rotated clockwise
+  -- ^ how many cells the gradient is rotated clockwise
   }
   deriving (Eq, Show)
 
@@ -262,7 +259,8 @@ defBorderProps = BorderProps Nothing (uniformSides Nothing) (uniformSides Nothin
 data Edges = Edges {edgeTop, edgeRight, edgeBottom, edgeLeft :: !Bool}
   deriving (Eq, Show)
 
--- | The characters to draw a border with, and the sides to draw. Without
+-- | The characters to draw a border with, and the sides to draw. A side
+-- left as 'Nothing' is drawn only when the characters are set; without
 -- characters, sides switched on explicitly use 'normalBorder'.
 borderEdges :: BorderProps -> (Border, Edges)
 borderEdges p =
@@ -370,8 +368,9 @@ unsetFlag f = attrsMod (setFlag f Nothing)
 underline :: Mod f
 underline = underlineStyle SingleUnderline
 
--- | Curly, dotted and dashed underlines need a true-colour terminal; on
--- other profiles they are shown as a single underline.
+-- | The kind of underline. Double, curly, dotted and dashed underlines are
+-- sent only to true-colour terminals; on other profiles they are shown as
+-- a single underline.
 underlineStyle :: Underline -> Mod f
 underlineStyle u = attrsMod (\a -> a {attrUnderline = Just u})
 
@@ -414,7 +413,6 @@ unsetLink = attrsMod (\a -> a {attrLink = Nothing})
 
 -- Padding and margins ---------------------------------------------------------
 
--- Negative padding and margins count as 0.
 paddingMod :: HasBox f => (Sides Int -> Sides Int) -> Mod f
 paddingMod g = fieldMod (overBox (\b -> b {boxPadding = fmap (max 0) (g (boxPadding b))}))
 
@@ -594,15 +592,16 @@ borderSide g = borderMod (\p -> p {borderSides = g (borderSides p)})
 sizeMod :: HasSize f => (Size -> Size) -> Mod f
 sizeMod = fieldMod . overSize
 
--- | Total width, including padding and border, when there is room for
--- it. Laid out in less space (a narrow terminal, a full row), the thing
--- shrinks like any other rather than overflowing. A negative width counts
+-- | @width n@: a total width of @n@ columns when there is room for it.
+-- Laid out in less space (a narrow terminal, a full row), the thing
+-- shrinks like any other rather than overflowing. For a style, the width
+-- includes padding and border, but not margins. A negative width counts
 -- as 0, as do negative heights and crops.
 width :: HasSize f => Int -> Mod f
 width n = sizeMod (\s -> s {sizeWidth = Just (max 0 n)})
 
--- | Minimum total height, including padding and border: the thing is at
--- least this many lines tall.
+-- | @height n@: the thing is at least @n@ lines tall. For a style, the
+-- height includes padding and border, but not margins.
 height :: HasSize f => Int -> Mod f
 height n = sizeMod (\s -> s {sizeHeight = Just (max 0 n)})
 
@@ -627,7 +626,8 @@ maxWidth :: HasCrop f => Int -> Mod f
 maxWidth n = propMod (\p -> p {propMaxWidth = Just (max 0 n)})
 
 -- | Crop the final result (for a style, margins included) to at most this
--- many rows. A table leaves out the body rows that do not fit instead (see
+-- many lines. A table leaves out the body rows that do not fit instead,
+-- with a row of ellipses in their place where there is room for it (see
 -- 'Lipstick.Table.yOffset').
 maxHeight :: HasCrop f => Int -> Mod f
 maxHeight n = propMod (\p -> p {propMaxHeight = Just (max 0 n)})

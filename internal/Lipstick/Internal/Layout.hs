@@ -1,4 +1,5 @@
--- | Laying out blocks at a width. Not part of the stable API.
+-- | Laying out blocks at a width, hidden from other packages: the public
+-- parts are re-exported by "Lipstick.Block".
 --
 -- A 'Block' is first given the text settings it inherits ('TextStyle'),
 -- which can change what it measures, and becomes a 'Measured'. A tree of
@@ -6,10 +7,12 @@
 -- Going up, every node reports a 'Request': its smallest and natural
 -- width, which depend only on its content, and, from 'blockLayout', its
 -- natural height at the width it was given. Going down, a parent shares
--- its width among its children with 'allocate' and tells children that
--- stretch the height of their row, which it knows only once the same
--- calls have reported their natural heights. Laziness resolves the
--- apparent circle (see jaspervdj's "Lazy Layout"), as long as
+-- its width among its children with 'allocateWithin' and tells children
+-- that stretch the height of their row, which it knows only once the
+-- same calls have reported their natural heights. Laziness resolves the
+-- apparent circle (see jaspervdj's
+-- [Lazy Layout](https://jaspervdj.be/posts/2023-07-22-lazy-layout.html)),
+-- as long as
 --
 -- * a 'Request' never depends on the 'Assign'ment, and
 -- * the natural height never depends on 'assignHeight'.
@@ -76,7 +79,7 @@ data TextStyle = TextStyle
   -- ^ newlines removed, never wrapped
   }
 
--- | Left-aligned, wrapping text with four-column tabs.
+-- | Left-aligned, wrapping text, with each tab replaced by four spaces.
 defTextStyle :: TextStyle
 defTextStyle = TextStyle left True [] 4 Nothing False
 
@@ -102,9 +105,9 @@ data Request = Request
   , reqStretch :: Bool
   -- ^ whether the block grows to the height of its row
   , reqFill :: Bool
-  -- ^ whether it takes the whole width of a box it is framed in, so the
-  -- box's alignment applies to its lines (text), rather than what it
-  -- needs, the box aligning it as a whole (boxes, rows)
+  -- ^ whether a box framing it gives it the whole inner width, so it
+  -- aligns its own lines (text), rather than only the width it takes, the
+  -- box aligning it as a whole (boxes, rows)
   }
 
 -- | What a parent gives a block. Lazy: 'assignHeight' can depend on the
@@ -119,8 +122,10 @@ data Assign = Assign
 instance IsString Block where
   fromString = textBlock . plain . T.pack
 
--- | Lay a block out in an available width: its natural width when there is
--- no limit, and otherwise as much as it needs (all of it if it grows).
+-- | Lay a block out in an available width: at its natural width, or, if
+-- it grows, at as much of the width as it can use (up to its
+-- 'Lipstick.Mod.maxWidth', say), but never wider than is available.
+-- With 'Nothing', at its natural width.
 layout :: Maybe Int -> Block -> Grid
 layout = layoutIn defTextStyle
 
@@ -132,8 +137,9 @@ layoutIn ctx avail b = fst (blockLayout n (Assign w 0))
     r = blockRequest n
     w = maybe (reqMax r) (takenWidth r) avail
 
--- | How much of an available width a block takes, when it does not have to
--- shrink: its natural width, or as much as it can use if it grows.
+-- | The width a block takes on its own in an available width: its natural
+-- width, or, if it grows, as much as its limit allows (but at least its
+-- natural width); never more than is available.
 takenWidth :: Request -> Int -> Int
 takenWidth r avail
   | reqGrow r > 0 = maybe a (min a . max (reqMax r)) (reqLimit r)
@@ -149,8 +155,9 @@ addLimits rs = sum <$> traverse usableWidth rs
 maxLimit :: [Request] -> Maybe Int
 maxLimit rs = maximum . (0 :) <$> traverse usableWidth rs
 
--- | The most a block can use, at most its natural width if it does not
--- grow.
+-- | The most a block can use: its natural width if it does not grow,
+-- otherwise its limit but at least its natural width; 'Nothing' for no
+-- limit.
 usableWidth :: Request -> Maybe Int
 usableWidth r
   | reqGrow r > 0 = max (reqMax r) <$> reqLimit r
@@ -197,11 +204,13 @@ textBlock inl = Block $ \ctx ->
   where
     defaultLines = inlineLines (textTabWidth defTextStyle) inl
 
--- | The width to lay out something with a 'Lipstick.Mod.maxWidth' crop at,
--- before cropping, given the crop, its weight for spare width, its natural
--- width and the width it is given. When the crop is what limits it, that
--- is its natural width, so the crop cuts instead of making text wrap; or,
--- for something that grows, the crop width, so it fills up to it.
+-- | The width to lay out something with a 'Lipstick.Mod.maxWidth' crop
+-- at, before cropping, given the crop, its weight for spare width, its
+-- natural width and the width @w@ it is given. When the crop, not @w@, is
+-- the binding limit, something that grows is laid out at the crop width,
+-- so it fills up to it, and anything else at least at its natural width,
+-- so the crop cuts lines instead of making text wrap. Otherwise it is
+-- laid out at @w@.
 cropLayoutWidth :: Maybe Int -> Int -> Int -> Int -> Int
 cropLayoutWidth crop weight natural w = case crop of
   Just c
@@ -221,8 +230,9 @@ cropLayoutWidth crop weight natural w = case crop of
 --   whichever is less.
 --
 -- * When even the smallest widths do not fit, the widest children shrink
---   further, down to one column (zero for children with nothing in them),
---   and the result is wider than the space only if that is still too much.
+--   further, down to one column (zero for children whose smallest width
+--   is zero), and the result is wider than the space only if that is
+--   still too much.
 --
 -- The widths add up to the space whenever the bounds allow it.
 allocate :: Int -> [(Int, Int, Int)] -> [Int]
@@ -257,7 +267,9 @@ allocateWithin space children
 
     -- Every child at @clamp lo hi t@ for the highest level @t@ that fits;
     -- the columns left over go to the children cut at the level, right
-    -- ones first (the widest-first order shrinks left ones first).
+    -- ones first: that is where shrinking the widest child one column at
+    -- a time, leftmost on ties, would leave them, and the tests check
+    -- that the two agree.
     level lows highs
       | sum lows >= w = lows
       | otherwise =

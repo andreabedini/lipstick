@@ -13,16 +13,11 @@ module Lipstick.Internal.Color
   , complete
 
     -- ** The 16 basic colours
-    -- | What they look like is up to the terminal's palette. Where they
-    -- are turned into RGB, xterm's palette is used.
   , black, red, green, yellow, blue, magenta, cyan, white
   , brightBlack, brightRed, brightGreen, brightYellow
   , brightBlue, brightMagenta, brightCyan, brightWhite
 
     -- * Manipulating colours
-    -- | These work in the OkLab colour space, so steps look even. Palette
-    -- colours are converted to RGB using xterm's palette, and adaptive
-    -- colours are transformed in every variant.
   , mix
   , blend
   , blend2D
@@ -74,7 +69,8 @@ instance Show Color where
     Complete t x y -> showString "complete " . showsPrec 11 t . showChar ' ' . showsPrec 11 x . showChar ' ' . showsPrec 11 y
 
 -- | Parses @"#rgb"@, @"#rrggbb"@ or a palette index @"0"@–@"255"@.
--- Calls 'error' on anything else; use 'hex' for a total alternative.
+-- Calls 'error' on anything else; use 'hex' for a total parser of hex
+-- colours.
 instance IsString Color where
   fromString s =
     fromMaybe (error ("Lipstick.Color: invalid colour literal " ++ show s)) (parseColor s)
@@ -207,8 +203,9 @@ data ColorProfile
   | TrueColor
   deriving (Eq, Ord, Show, Enum, Bounded)
 
--- | Resolve an adaptive colour for a profile and background, then downsample.
--- 'Nothing' means the profile cannot show colours.
+-- | Resolve an adaptive colour for a profile and for whether the
+-- background is dark, then downsample. 'Nothing' means the profile cannot
+-- show colours.
 resolveColor :: ColorProfile -> Bool -> Color -> Maybe TermColor
 resolveColor p dark = go
   where
@@ -259,7 +256,8 @@ ansi16Palette =
 cubeLevel :: Int -> Word8
 cubeLevel i = [0, 95, 135, 175, 215, 255] !! i
 
--- | Nearest colour in the 6×6×6 cube or the grey ramp (tmux's algorithm).
+-- | Nearest colour in the 6×6×6 cube or the grey ramp, as in tmux's
+-- colour_find_rgb (colour.c).
 rgbTo256 :: Word8 -> Word8 -> Word8 -> Word8
 rgbTo256 r8 g8 b8
   | cube == target = cubeIx
@@ -292,6 +290,8 @@ nearest16 (r, g, b) =
 
 -- Manipulating colours ----------------------------------------------------------
 
+-- | Björn Ottosson's OkLab, converted from and to sRGB as in
+-- <https://bottosson.github.io/posts/oklab/>.
 data OkLab = OkLab !Double !Double !Double
 
 -- | Apply a function to every concrete colour inside an adaptive one.
@@ -312,6 +312,7 @@ darken k = mapOkLab (lerpOkLab (clamp01 k) (OkLab 0 0 0))
 lighten :: Double -> Color -> Color
 lighten k = mapOkLab (lerpOkLab (clamp01 k) (OkLab 1 0 0))
 
+-- | @lerpOkLab k to from@ moves @from@ a fraction @k@ of the way to @to@.
 lerpOkLab :: Double -> OkLab -> OkLab -> OkLab
 lerpOkLab k (OkLab l2 a2 b2) (OkLab l1 a1 b1) =
   OkLab (l1 + (l2 - l1) * k) (a1 + (a2 - a1) * k) (b1 + (b2 - b1) * k)
@@ -321,7 +322,8 @@ lerpOkLab k (OkLab l2 a2 b2) (OkLab l1 a1 b1) =
 complementary :: Color -> Color
 complementary = mapOkLab (\(OkLab l a b) -> OkLab l (negate a) (negate b))
 
--- | @mix t c1 c2@ is @c1@ at 0, @c2@ at 1, and in between otherwise.
+-- | @mix t c1 c2@ is @c1@ at 0, @c2@ at 1, and in between otherwise;
+-- @t@ is clamped to [0, 1].
 -- Adaptive colours are mixed variant by variant: for each background and
 -- each profile, with the matching variant of the other colour.
 mix :: Double -> Color -> Color -> Color
@@ -416,9 +418,11 @@ fromOkLab (OkLab ll a b) =
       let v = if x <= 0.0031308 then 12.92 * x else 1.055 * x ** (1 / 2.4) - 0.055
        in round (255 * clamp01 v)
 
--- | A two-dimensional gradient, as rows of colours: the gradient runs
--- through the stops along the direction given by an angle in degrees,
--- anticlockwise as in lipgloss (0 is left to right, 90 bottom to top).
+-- | @blend2D width height angle stops@ is a two-dimensional gradient, as
+-- @height@ rows of @width@ colours, at least one each way (no rows
+-- without stops). The gradient runs through the stops along the
+-- direction given by the angle in degrees, anticlockwise as in lipgloss
+-- (0 is left to right, 90 bottom to top).
 blend2D :: Int -> Int -> Double -> [Color] -> [[Color]]
 blend2D w0 h0 angle stops = case stops of
   [] -> []

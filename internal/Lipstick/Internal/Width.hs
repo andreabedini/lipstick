@@ -65,12 +65,13 @@ props c
       | otherwise =
           let mid = (lo + h + 1) `div` 2
            in if unsafeAt runStarts mid <= n then search mid h else search lo (mid - 1)
+    -- ASCII must agree with the table: these only skip the search.
     asciiControl k
       | k == 0x0D = gcbCR
       | k == 0x0A = gcbLF
       | otherwise = gcbControl
     asciiProps k
-      -- '#', '*' and the digits have the Emoji property (keycaps).
+      -- '#', '*' and the digits have the Emoji property (keycaps), bit 6.
       | k == 0x23 || k == 0x2A || (k >= 0x30 && k <= 0x39) = 0x40
       | otherwise = 0
 
@@ -85,6 +86,7 @@ isEmoji p = testBit p 6
 incb :: Word16 -> Word16
 incb p = (p `shiftR` 7) .&. 3
 
+-- These must match gcbCode and incbCode in scripts/GenUnicodeTable.hs.
 gcbCR, gcbLF, gcbControl, gcbExtend, gcbZWJ, gcbRI :: Word16
 gcbCR = 1
 gcbLF = 2
@@ -117,6 +119,7 @@ data State = State
   , stConjunct :: !Conjunct
   }
 
+-- | Progress through GB11's ExtPict Extend* ZWJ.
 data Pict = NoPict | InPict | PictZWJ
   deriving (Eq)
 
@@ -146,7 +149,8 @@ step (State regional pict conjunct) p =
       Consonant l | incb p == incbExtend -> Consonant l
       _ -> NoConjunct
 
--- | Whether the next character continues the current cluster.
+-- | Whether the next character continues the current cluster. Rule
+-- numbers are UAX #29's, Unicode 16.0.
 joins :: State -> Word16 -> Word16 -> Bool
 joins st prevP nextP
   | prev == gcbCR && next == gcbLF = True -- GB3
@@ -177,8 +181,9 @@ codeWidth p
   where
     g = gcb p
 
--- | The skin tone modifiers: Extend, so they join the emoji before them,
--- but wide.
+-- | Extend characters with the Emoji property: in Unicode 16.0, exactly
+-- the skin tone modifiers U+1F3FB–1F3FF. They join the emoji before them,
+-- but are wide on their own.
 isEmojiModifier :: Word16 -> Bool
 isEmojiModifier p = gcb p == gcbExtend && isEmoji p
 

@@ -1,4 +1,5 @@
--- | The representation of rendered output. Not part of the stable API.
+-- | The representation of rendered output, hidden from other packages: the
+-- public parts are re-exported by "Lipstick.Grid" and "Lipstick.Block".
 --
 -- A 'Grid' is a rectangle: every line is exactly 'gridWidth' columns
 -- wide and there are exactly 'gridHeight' lines. A line is a list of
@@ -67,8 +68,11 @@ data Line = Line
 -- contains no newlines or control characters.
 data Span = Span
   { spanAttrs :: !Attrs
+  -- ^ the attributes of every cluster in the run
   , spanText :: !Text
+  -- ^ the clusters, one after another
   , spanWidth :: !Int
+  -- ^ the width of the text, in columns
   }
   deriving (Eq, Show)
 
@@ -122,8 +126,8 @@ joinGridsH p gs =
           blank = blankCells mempty (gridWidth g)
        in replicate before blank ++ gridCells g ++ replicate after blank
 
--- | Grids stacked in a column of a width; the position aligns narrower
--- ones horizontally.
+-- | Grids stacked in a column @w@ wide; the position aligns narrower ones
+-- horizontally. No grid may be wider than @w@.
 joinGridsV :: Position -> Int -> [Grid] -> Grid
 joinGridsV p w gs =
   Grid w (sum (map gridHeight gs)) [cellsLine (alignCells mempty p w l) | g <- gs, l <- gridCells g]
@@ -138,7 +142,8 @@ blankCells :: Attrs -> Int -> [Cell]
 blankCells a n = replicate n (Cell a (T.singleton ' ') 1 False)
 
 -- | Exactly @n@ columns made by repeating the clusters of a text. Clusters
--- that would overflow, and an empty text, give spaces instead.
+-- that would overflow, and an empty text, give spaces instead. Zero-width
+-- clusters, control characters among them, are dropped.
 fillCells :: Attrs -> Text -> Int -> [Cell]
 fillCells a t n = case filter ((> 0) . snd) (clusters t) of
   [] -> blankCells a n
@@ -213,8 +218,8 @@ wrapCellsWith breakpoints w0 cells
         | n == w -> ([c], rest) -- a cluster wider than the line: take it anyway
       _ -> ([], cs)
 
--- | The widths of the words of a line, as 'wrapCellsWith' sees them: the
--- narrowest the line wraps to without breaking a word.
+-- | The widths of the words of a line as 'wrapCellsWith' sees them; their
+-- maximum is the narrowest width that breaks no word.
 wordWidths :: [Char] -> [Cell] -> [Int]
 wordWidths breakpoints cs = [cellsWidth t | t <- wrapTokens breakpoints cs, not (all isSpaceCell t)]
 

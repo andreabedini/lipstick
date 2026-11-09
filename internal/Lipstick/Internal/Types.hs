@@ -1,4 +1,6 @@
--- | Types shared by every module. Not part of the stable API.
+-- | Text attributes and positions, hidden from other packages: the public
+-- parts are re-exported by "Lipstick.Mod", "Lipstick.Block",
+-- "Lipstick.Grid" and "Lipstick.Ansi".
 module Lipstick.Internal.Types
   ( -- * Text attributes
     Attrs (..)
@@ -103,10 +105,10 @@ getFlag f = case f of
 fillAttrs :: Attrs -> Attrs
 fillAttrs a = mempty {attrBg = attrBg a, attrReverse = attrReverse a}
 
--- | A URI made safe for an OSC 8 hyperlink, which allows only printable
--- ASCII: every other character, including the controls that would end the
--- escape sequence early, is percent-encoded as UTF-8. Existing escapes are
--- kept, so applying it twice changes nothing.
+-- | A URI made safe for an OSC 8 hyperlink: every character other than
+-- printable, non-space ASCII is percent-encoded as UTF-8, including the
+-- controls that would end the escape sequence early. @%@ is kept, so
+-- existing escapes survive and applying it twice changes nothing.
 escapeUri :: Text -> Text
 escapeUri = T.concatMap escape
   where
@@ -147,7 +149,8 @@ bottom :: Position
 bottom = Position 1
 
 -- | Split @extra@ columns (or rows) of space into the amounts before and
--- after content placed at a position.
+-- after content placed at a position, as @(before, after)@. @before@
+-- rounds down, so at 'center' the odd column goes after.
 splitExtra :: Position -> Int -> (Int, Int)
 splitExtra (Position p) extra =
   let e = max 0 extra
