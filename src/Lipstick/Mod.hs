@@ -14,10 +14,12 @@
 -- Like optparse-applicative's @Mod@, a modifier has two parts:
 --
 -- * a change to properties every thing has: text attributes and
---   the 'maxWidth' / 'maxHeight' crop. Modifiers of these, such as 'fg' or
---   'bold', work on any thing. Each thing's text attributes are the base
---   for everything it draws, overridden by anything more specific inside it
---   (a cell style, an item style, the attributes of a placed block).
+--   the 'maxWidth' / 'maxHeight' crop. Text attributes, such as 'fg' or
+--   'bold', can be set on any thing, and the crop on any thing but
+--   'Lipstick.Block.Inline' text ('HasCrop'). Each thing's text attributes
+--   are the base for everything it draws, overridden by anything more
+--   specific inside it (a cell style, an item style, the attributes of a
+--   placed block).
 --
 -- * a change to the thing's own fields. Modifiers shared by some things go
 --   through the classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and
@@ -104,6 +106,7 @@ module Lipstick.Mod
   , HasSize
   , HasAlign
   , HasWrap
+  , HasCrop
   , Sides (..)
 
     -- * Text attributes

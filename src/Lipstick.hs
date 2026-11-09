@@ -14,16 +14,16 @@
 -- == Concepts
 --
 -- [Modifiers] A @'Mod' f@ is a change to a thing @f@: a 'Style', a
--- 'Table', an 'Outline', a 'Place' or a 'Layer'. Modifiers form a monoid:
--- '<>' applies the left one first, so later settings win, and 'mempty'
--- changes nothing. Text attributes ('fg', 'bold', 'link', …) and the
--- 'maxWidth' and 'maxHeight' crop work on every thing. The other
--- modifiers work on the things that have the part they set, which the
--- classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and 'HasWrap' say;
--- a modifier on a thing without that part is a type error. A modifier
--- meant for several kinds of thing needs a signature, as in
--- @base :: Mod f@ or @boxed :: (HasBorder f, HasSize f) => Mod f@:
--- without one, the monomorphism restriction fixes its type.
+-- 'Table', an 'Outline', a 'Place' or a 'Layer', or the 'Inline' text of
+-- 'styled'. Modifiers form a monoid: '<>' applies the left one first, so
+-- later settings win, and 'mempty' changes nothing. Text attributes
+-- ('fg', 'bold', 'link', …) work on every thing. The other modifiers work
+-- on the things that have the part they set, which the classes 'HasBox',
+-- 'HasBorder', 'HasSize', 'HasAlign', 'HasWrap' and 'HasCrop' say; a
+-- modifier on a thing without that part is a type error. A modifier for
+-- several kinds of thing that uses these classes needs a signature, as in
+-- @boxed :: (HasBorder f, HasSize f) => Mod f@: without one, the
+-- monomorphism restriction gives it a single type.
 --
 -- [Text] 'Inline' is text with styles: string literals, 'styled' pieces
 -- joined with '<>', and text with escape sequences read by 'fromAnsi'.
@@ -112,6 +112,7 @@ module Lipstick
   , HasSize
   , HasAlign
   , HasWrap
+  , HasCrop
 
     -- * Styles
     -- | A style draws text, or a block, in a box. See "Lipstick.Style".

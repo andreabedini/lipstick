@@ -1,30 +1,8 @@
 -- | The representation of modifiers and the records they change, and the
 -- modifiers themselves. Hidden: the public API is "Lipstick.Mod".
 --
--- Modifiers, in the style of optparse-applicative's builder.
---
--- A @'Mod' f@ is a change to a thing @f@ (a 'Lipstick.Style.Style', a
--- 'Lipstick.Table.Table', a 'Lipstick.Place.Place', …). Modifiers form a
--- monoid in which the later setting wins, so styles are built and extended
--- with '<>':
---
--- > card :: Mod Style
--- > card = bold <> fg "#FAFAFA" <> bg "#7D56F4" <> padding 1 2
--- >
--- > warning :: Mod Style
--- > warning = card <> bg "#F25D94"
---
--- Like optparse-applicative's @Mod@, a modifier has two parts:
---
--- * a change to properties every thing has ('Props'): text attributes and
---   the 'maxWidth' / 'maxHeight' crop. Modifiers of these, such as 'fg' or
---   'bold', work on any thing. Each thing's text attributes are the base
---   for everything it draws, overridden by anything more specific inside it
---   (a cell style, an item style, the attributes of a placed block).
---
--- * a change to the thing's own fields. Modifiers shared by some things go
---   through the classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and
---   'HasWrap'.
+-- A @'Mod' f@ is two changes: one to the fields of the thing @f@, and one
+-- to the 'Props' every thing has. "Lipstick.Mod" explains how they are used.
 module Lipstick.Internal.Mod
   ( Mod (..)
   , fieldMod
@@ -45,6 +23,7 @@ module Lipstick.Internal.Mod
   , HasSize (..)
   , HasAlign (..)
   , HasWrap (..)
+  , HasCrop
   , Sides (..)
   , uniformSides
   , Box (..)
@@ -235,6 +214,12 @@ class HasAlign f where
 -- to them.
 class HasWrap f where
   overWrap :: (Bool -> Bool) -> f -> f
+
+-- | Things whose result can be cropped: every thing but
+-- 'Lipstick.Block.Inline', whose text is laid out with the text around it.
+-- The modifiers 'maxWidth', 'maxHeight', 'unsetMaxWidth' and
+-- 'unsetMaxHeight' apply to them.
+class HasCrop f
 
 -- | One value for each side: top, right, bottom and left, as in CSS.
 data Sides a = Sides {sideTop, sideRight, sideBottom, sideLeft :: !a}
@@ -638,13 +623,13 @@ stretchHeight = sizeMod (\s -> s {sizeStretch = True})
 
 -- | Crop the final result (for a style, margins included) to at most this
 -- many columns.
-maxWidth :: Int -> Mod f
+maxWidth :: HasCrop f => Int -> Mod f
 maxWidth n = propMod (\p -> p {propMaxWidth = Just (max 0 n)})
 
 -- | Crop the final result (for a style, margins included) to at most this
 -- many rows. A table leaves out the body rows that do not fit instead (see
 -- 'Lipstick.Table.yOffset').
-maxHeight :: Int -> Mod f
+maxHeight :: HasCrop f => Int -> Mod f
 maxHeight n = propMod (\p -> p {propMaxHeight = Just (max 0 n)})
 
 -- | Forget the 'width'.
@@ -656,11 +641,11 @@ unsetHeight :: HasSize f => Mod f
 unsetHeight = sizeMod (\s -> s {sizeHeight = Nothing})
 
 -- | Forget the 'maxWidth': no crop to a width.
-unsetMaxWidth :: Mod f
+unsetMaxWidth :: HasCrop f => Mod f
 unsetMaxWidth = propMod (\p -> p {propMaxWidth = Nothing})
 
 -- | Forget the 'maxHeight': no crop to a height.
-unsetMaxHeight :: Mod f
+unsetMaxHeight :: HasCrop f => Mod f
 unsetMaxHeight = propMod (\p -> p {propMaxHeight = Nothing})
 
 -- Alignment -------------------------------------------------------------------

@@ -167,6 +167,8 @@ instance HasAlign Style where
 instance HasWrap Style where
   overWrap f s = s {styleWrap = f (styleWrap s)}
 
+instance HasCrop Style
+
 defStyle :: Style
 defStyle = Style defBox defBorderProps defSize defAlign 4 Nothing True [] True Nothing Nothing Nothing
 

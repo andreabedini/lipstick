@@ -173,6 +173,8 @@ instance HasSize Table where
 instance HasWrap Table where
   overWrap f t = t {tableWrap = f (tableWrap t)}
 
+instance HasCrop Table
+
 defTable :: Table
 defTable =
   Table

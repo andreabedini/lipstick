@@ -52,6 +52,8 @@ instance HasSize Place where
 instance HasAlign Place where
   overAlign f p = p {placeAlign = f (placeAlign p)}
 
+instance HasCrop Place
+
 defPlace :: Place
 defPlace = Place defSize defAlign (T.singleton ' ')
 

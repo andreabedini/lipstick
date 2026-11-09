@@ -167,6 +167,8 @@ data Outline = Outline
 instance HasSize Outline where
   overSize f o = o {outSize = f (outSize o)}
 
+instance HasCrop Outline
+
 treeDefaults, listDefaults :: Outline
 treeDefaults =
   Outline

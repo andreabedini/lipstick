@@ -51,9 +51,9 @@ warning :: Mod Style
 warning = card <> bg "#F25D94"
 ```
 
-Text attributes (`fg`, `bg`, `bold`, `underline`, `link`, …) and the
-`maxWidth` / `maxHeight` crop apply to every kind of thing lipstick draws,
-not just styles, so the same modifier works everywhere:
+Text attributes (`fg`, `bg`, `bold`, `underline`, `link`, …) apply to
+every kind of thing lipstick draws, not just styles, so the same modifier
+works everywhere:
 
 ```haskell
 base :: Mod f
@@ -67,7 +67,8 @@ list base items               -- the base style of a list
 Other modifiers apply to the things that have the corresponding part:
 `padding` and `margin` to styles, `border` to styles and tables, `width` to
 styles, tables, lists, trees and placed blocks, `align` to styles and placed
-blocks. A modifier on something that does not support it is a type error.
+blocks, and the `maxWidth` / `maxHeight` crop to everything but `styled`
+text. A modifier on something that does not support it is a type error.
 
 The sizes mean the same for everything that has them. `width n` is the
 width when there is room for it: the content is laid out in `n` columns,

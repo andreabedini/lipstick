@@ -71,7 +71,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Lipstick.Internal.Grid
 import Lipstick.Internal.Layout (Assign (..), Block (..), Measured (..), Request (..), TextStyle, cropLayoutWidth, defTextStyle, measureIn, takenWidth, usableWidth)
-import Lipstick.Internal.Mod (Mod, Props (..), defProps, fieldMod, runMod, withProps)
+import Lipstick.Internal.Mod (HasCrop, Mod, Props (..), defProps, fieldMod, runMod, withProps)
 
 -- $setup
 -- >>> import Lipstick
@@ -89,6 +89,8 @@ data Layer = Layer
   , layerBlock :: Block
   , layerProps :: Props
   }
+
+instance HasCrop Layer
 
 -- | A layer showing a block, at the origin unless moved with 'offset'. The
 -- layer's text attributes are the base for the block. The block is laid
