@@ -143,7 +143,7 @@ data Style = Style
   , styleSize :: !Size
   , styleAlign :: !Align
   , styleTabWidth :: !Int
-  , styleInline :: !Bool
+  , styleInline :: !(Maybe Bool)
   , styleWrap :: !Bool
   , styleBreaks :: ![Char]
   , styleColorWhitespace :: !Bool
@@ -168,7 +168,7 @@ instance HasWrap Style where
   overWrap f s = s {styleWrap = f (styleWrap s)}
 
 defStyle :: Style
-defStyle = Style defBox defBorderProps defSize defAlign 4 False True [] True Nothing Nothing Nothing
+defStyle = Style defBox defBorderProps defSize defAlign 4 Nothing True [] True Nothing Nothing Nothing
 
 -- | The style and properties a modifier produces from the defaults.
 resolveStyle :: Mod Style -> (Style, Props)
@@ -190,11 +190,12 @@ unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 -- >>> putBlock (render (inline <> border normalBorder <> padding 1 1) "one\ntwo")
 -- onetwo
 inline :: Mod Style
-inline = fieldMod (\s -> s {styleInline = True})
+inline = fieldMod (\s -> s {styleInline = Just True})
 
--- | Undo 'inline': render with the box.
+-- | Undo 'inline': render with the box, and keep the newlines even inside
+-- a style that sets 'inline'.
 unsetInline :: Mod Style
-unsetInline = fieldMod (\s -> s {styleInline = False})
+unsetInline = fieldMod (\s -> s {styleInline = Just False})
 
 -- | Change the text before rendering it (each styled piece separately),
 -- including text inside blocks the style frames.
@@ -276,10 +277,12 @@ frame :: Mod Style -> Block -> Block
 frame m b = Block $ \ctx ->
   let (s, p) = runMod m (inheriting ctx)
       n = measureIn (textStyleOf ctx s) b
-   in if styleInline s then inlineNode p n else box s p n
+   in if styleInline s == Just True then inlineNode p n else box s p n
 
 -- | The defaults of a style inside inherited text settings. Whether the
--- style itself is 'inline' (has no box) is not inherited.
+-- style itself is 'inline' (has no box) is not inherited: 'styleInline'
+-- stays unset, and 'textStyleOf' passes the inherited removal of newlines
+-- on unless the style sets it.
 inheriting :: TextStyle -> Style
 inheriting ctx =
   defStyle
@@ -299,7 +302,7 @@ textStyleOf ctx s =
     , textBreaks = styleBreaks s
     , textTabWidth = styleTabWidth s
     , textTransform = styleTransform s
-    , textInline = textInline ctx || styleInline s
+    , textInline = fromMaybe (textInline ctx) (styleInline s)
     }
 
 -- | An 'inline' style: no box, only its attributes under the content and
@@ -504,7 +507,7 @@ getTabWidth = field styleTabWidth
 
 -- | Whether the style is 'inline'.
 getInline :: Mod Style -> Bool
-getInline = field styleInline
+getInline = field ((== Just True) . styleInline)
 
 -- | Columns of padding: left plus right.
 horizontalPadding :: Mod Style -> Int

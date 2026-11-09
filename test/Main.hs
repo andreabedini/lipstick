@@ -293,6 +293,10 @@ extrasTests =
         size (styleIndices [0, 2 .. n] bold mempty (plain long)) @?= n
     , testCase "inline respects maxWidth" $
         plainLines (render (inline <> maxWidth 3) "abcdef") @?= ["abc"]
+    , testCase "inline removes newlines in framed blocks, boxes kept" $
+        plainLines (frame inline (render (border asciiBorder) "a\nb")) @?= ["+--+", "|ab|", "+--+"]
+    , testCase "unsetInline keeps newlines inside an inline frame" $
+        plainLines (frame inline (render unsetInline "a\nb")) @?= ["a", "b"]
     , testCase "inline keeps attributes" $
         toAnsi defaultRenderEnv (render (inline <> bold) "a\nb") @?= "\ESC[0;1mab\ESC[0m"
     , testCase "padding char" $
