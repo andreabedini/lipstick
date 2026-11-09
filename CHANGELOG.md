@@ -8,7 +8,8 @@ First version: a port of lipgloss v2.
   padding and margins (with fill characters), borders (presets, per-side
   colours, gradients), width and height, alignment, wrapping or truncation,
   inline rendering, tab width, `transform`, unset modifiers and getters.
-  Text attributes and `maxWidth`/`maxHeight` work on every kind of thing.
+  Text attributes work on every kind of thing, and `maxWidth`/`maxHeight`
+  on every kind but `Inline` text.
 * Blocks: rendering to a structured block of styled spans, joining, placing,
   framing and measuring; ANSI only on output.
 * Inline text with nested styles, `fromAnsi` for text with escape sequences,
@@ -21,10 +22,12 @@ First version: a port of lipgloss v2.
 * Tables: cells are blocks; header, column and row rules, cell styles by
   position, fitting a width, height with scrolling, truncation.
 * Text settings (alignment, wrapping, break characters, tab width,
-  transform) are inherited by the text inside a framed block.
+  transform, inline) are inherited by the text inside a framed block.
 * Lists and trees (`Outline`): enumerators, indenters, item, enumerator and
   indenter styles, width, item offsets.
-* Layers: offsets, z-order, transparency, sublayers, hit testing.
+* Layers: offsets, z-order, `transparent` layers, sublayers, hit testing.
+* `Lipstick.Grid`: the laid-out lines, cells and styled spans of a block,
+  for other outputs.
 * Colours: hex and palette literals, light/dark and per-profile colours,
   downsampling, `blend`, `blend2D`, `darken`, `lighten`, `complementary`.
 * Output: colour profile detection (`NO_COLOR`, `CLICOLOR_FORCE`,

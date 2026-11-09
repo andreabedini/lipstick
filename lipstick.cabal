@@ -4,9 +4,12 @@ version:         0.1.0.0
 synopsis:        Style definitions for nice terminal layouts
 category:        Console, Text
 description:
-  A Haskell take on charmbracelet's lipgloss: styled, laid-out text for
-  command-line output. Styles are built from composable modifiers and render
-  to structured blocks, which are serialised to ANSI only at the edge.
+  A port of charmbracelet's lipgloss (v2): colours, borders, padding,
+  alignment, tables, lists, trees and layered compositions for command-line
+  output. Styles are composable modifiers; they render to blocks of styled
+  text, laid out in the width available and turned into ANSI escape
+  sequences only when printed. lipstick-brick shows the blocks in brick and
+  vty applications.
 license:         MIT AND Unicode-3.0
 license-files:
     LICENSE
@@ -110,7 +113,8 @@ test-suite lipstick-test
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          Main.hs
-    -- The tests reach the library's internals by compiling its sources.
+    -- The tests reach the library's internals by compiling its sources, so
+    -- other-modules and build-depends must include the library's.
     hs-source-dirs:   test src internal
     other-modules:
         Lipstick

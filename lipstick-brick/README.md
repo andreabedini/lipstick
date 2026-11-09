@@ -26,7 +26,7 @@ ui = blockWidget defaultRenderEnv (render (border roundedBorder <> padding 1 2) 
   show:
 
   ```haskell
-  env = defaultRenderEnv {envProfile = profileForColorMode (outputColorMode output)}
+  env = defaultRenderEnv {envProfile = profileForColorMode (outputColorMode (outputIface vty))}
   ```
 
 vty measures text with its own width tables, which can disagree with
