@@ -18,10 +18,12 @@
 -- 'styled'. Modifiers form a monoid: '<>' applies the left one first, so
 -- later settings win, and 'mempty' changes nothing. Text attributes
 -- ('fg', 'bold', 'link', …) work on every thing. The other modifiers work
--- on the things that have the part they set, which the classes 'HasBox',
--- 'HasBorder', 'HasSize', 'HasAlign', 'HasWrap' and 'HasCrop' say; a
--- modifier on a thing without that part is a type error. A modifier for
--- several kinds of thing that uses these classes needs a signature, as in
+-- on the things that have the part they set. The classes 'HasBox',
+-- 'HasBorder', 'HasSize', 'HasAlign', 'HasWrap' and 'HasCrop' say which
+-- things have the parts that several share; the rest, such as 'offset'
+-- and 'cellStyle', belong to one thing. A modifier on a thing without
+-- that part is a type error. A modifier for several kinds of thing that
+-- uses these classes needs a signature, as in
 -- @boxed :: (HasBorder f, HasSize f) => Mod f@: without one, the
 -- monomorphism restriction gives it a single type.
 --
@@ -38,16 +40,17 @@
 -- without breaking words and the width it would like, and is laid out in
 -- the width it is given, so text wraps, table columns shrink, and blocks
 -- with 'fillWidth' take the spare columns of their row. The text settings
--- of a style ('align', 'noWrap', 'breakAfter', 'tabWidth', 'transform')
--- also apply to the text inside the blocks it frames, unless something
--- nearer sets them again.
+-- of a style ('align', 'noWrap', 'breakAfter', 'tabWidth', 'transform',
+-- 'inline') also apply to the text inside the blocks it frames, unless
+-- something nearer sets them again.
 --
--- [Sizes] They mean the same for every thing that has them. @'width' n@
--- is the width when there is room for it: the content is laid out in @n@
--- columns, and with less room the thing shrinks. @'height' n@ is the
--- least number of lines. 'maxWidth' and 'maxHeight' are the most, and
--- crop what does not fit; a table leaves out rows instead. For a style,
--- 'width' and 'height' include padding and border but not margins.
+-- [Sizes] @'width' n@ makes a thing @n@ columns wide when there is room
+-- (a table with 'fitContent' at most @n@), and narrower when there is
+-- not. @'height' n@ is the least number of lines. 'maxWidth' and
+-- 'maxHeight' crop the result to at most that many columns and lines;
+-- with 'maxHeight', a table leaves out body rows instead. For a style,
+-- 'width' and 'height' include padding and border but not margins, and
+-- the crops include margins too.
 --
 -- [Output] Nothing becomes escape sequences until a block is printed.
 -- A 'RenderEnv' says what the output can show (the colour profile,
@@ -90,8 +93,8 @@
 -- * "Lipstick.Width": the display width of text
 -- * "Lipstick.Grid": laid-out blocks, for other outputs
 --
--- The examples print with 'putBlock' and need @OverloadedStrings@. The
--- output is shown without colours and other attributes.
+-- Most examples print with 'putBlock', whose output is shown without
+-- colours and other attributes. All of them need @OverloadedStrings@.
 module Lipstick
   ( -- * Modifiers
     -- | A @'Mod' f@ configures a thing @f@. Modifiers combine with '<>',
@@ -239,7 +242,7 @@ module Lipstick
   , unsetLink
 
     -- * Padding and margins
-    -- | @padding@ and @margin@ take vertical then horizontal amounts.
+    -- | 'padding' and 'margin' take vertical then horizontal amounts.
     --
     -- >>> putBlock (render (border normalBorder <> padding 1 2 <> paddingChar '·' <> margin 0 2 <> marginChar '░') "box")
     -- ░░┌───────┐░░
@@ -308,8 +311,9 @@ module Lipstick
   , markdownBorder
 
     -- * Size, alignment and wrapping
-    -- | Sizes include padding and border. With less room than its 'width',
-    -- a thing shrinks.
+    -- | For a style, 'width' and 'height' include padding and border but
+    -- not margins, and 'maxWidth' and 'maxHeight' crop margins too. With
+    -- less room than its 'width', a thing shrinks.
     --
     -- >>> putBlock (render (width 12 <> height 4 <> border normalBorder <> align right <> valign bottom) "corner")
     -- ┌──────────┐
@@ -338,7 +342,8 @@ module Lipstick
   , unsetNoWrap
 
     -- * Getters
-    -- | The settings of a modifier, read back.
+    -- | The settings of a modifier, read back: what it sets, not what it
+    -- inherits inside a 'frame' (see "Lipstick.Style").
     --
     -- >>> let s = border normalBorder <> padding 1 2 <> width 20
     -- >>> (getWidth s, getPadding s, frameSize s)
@@ -453,7 +458,10 @@ module Lipstick
     -- "\ESC[0;35mpink\ESC[0m"
     -- >>> renderPlain (render (fg "#F25D94") "pink")
     -- "pink"
-  , RenderEnv (envProfile, envDarkBackground, envWidth)
+  , RenderEnv
+  , envProfile
+  , envDarkBackground
+  , envWidth
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines

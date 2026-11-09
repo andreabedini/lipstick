@@ -44,7 +44,10 @@
 -- >>> ansiWidth "\ESC[1;32mok\ESC[0m 3 tests passed"
 -- 17
 module Lipstick.Ansi
-  ( RenderEnv (envProfile, envDarkBackground, envWidth)
+  ( RenderEnv
+  , envProfile
+  , envDarkBackground
+  , envWidth
   , defaultRenderEnv
   , toAnsi
   , toAnsiLines
@@ -70,10 +73,13 @@ import Lipstick.Internal.Types
 -- $setup
 -- >>> import Lipstick
 
--- | What the output can display.
+-- | What the output can display, and the width to lay blocks out in.
+-- Change 'defaultRenderEnv' with record update syntax.
 data RenderEnv = RenderEnv
   { envProfile :: !ColorProfile
+  -- ^ the colours and attributes the output can display
   , envDarkBackground :: !Bool
+  -- ^ whether 'lightDark' colours take their dark variant
   , envWidth :: !(Maybe Int)
   -- ^ the width blocks are laid out in; 'Nothing' for their natural width
   }
@@ -83,17 +89,17 @@ data RenderEnv = RenderEnv
 defaultRenderEnv :: RenderEnv
 defaultRenderEnv = RenderEnv TrueColor True Nothing
 
--- | The block's lines, separated by newlines, without a trailing newline.
--- Attributes are reset at the end of every line.
+-- | 'toAnsiLines' joined with newlines, without a trailing newline.
 toAnsi :: RenderEnv -> Block -> Text
 toAnsi env = T.intercalate (T.singleton '\n') . toAnsiLines env
 
--- | The block's lines, each with its own escape sequences: attributes are
--- reset and hyperlinks closed at the end of every line.
+-- | The block laid out in the 'envWidth', one 'Text' per line. Every line
+-- is the block's full width, padded with spaces, and stands alone:
+-- attributes are reset and hyperlinks closed at its end.
 toAnsiLines :: RenderEnv -> Block -> [Text]
 toAnsiLines env = map (T.concat . renderLine env) . gridLines . layout (envWidth env)
 
--- | The block as plain text, without any escape sequences.
+-- | The block at its natural width, without any escape sequences.
 renderPlain :: Block -> Text
 renderPlain = toAnsi (RenderEnv NoTTY True Nothing)
 
@@ -207,7 +213,8 @@ decimal = (numbers !)
 -- graphics, tmux passthrough).
 -- Sequences that switch an attribute off (such as @22@ or @39@) unset it,
 -- so the attributes of an enclosing style show through, and a reset
--- reveals the enclosing style completely.
+-- reveals the enclosing style completely but does not end a hyperlink,
+-- which only OSC 8 does.
 fromAnsi :: Text -> Inline
 fromAnsi = Inline . go mempty
   where
@@ -357,10 +364,11 @@ applySGR groups a = case groups of
       _ -> SingleUnderline
 
 -- | The display width of text that may contain escape sequences: the width
--- of its widest line.
+-- of its widest line, with tabs as four columns.
 ansiWidth :: Text -> Int
 ansiWidth = gridWidth . fromCellLines . inlineLines 4 . fromAnsi
 
--- | The number of lines of text that may contain escape sequences.
+-- | The number of lines of text that may contain escape sequences: one
+-- more than the number of newlines.
 ansiHeight :: Text -> Int
 ansiHeight = gridHeight . fromCellLines . inlineLines 4 . fromAnsi

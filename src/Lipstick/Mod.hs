@@ -11,26 +11,27 @@
 -- > warning :: Mod Style
 -- > warning = card <> bg "#F25D94"
 --
--- Like optparse-applicative's @Mod@, a modifier has two parts:
+-- As in optparse-applicative's @Mod@, a change to the properties every
+-- thing has is kept apart from a change to the thing's own fields:
 --
--- * a change to properties every thing has: text attributes and
---   the 'maxWidth' / 'maxHeight' crop. Text attributes, such as 'fg' or
+-- * the properties every thing has are text attributes and the
+--   'maxWidth' / 'maxHeight' crop. Text attributes, such as 'fg' or
 --   'bold', can be set on any thing, and the crop on any thing but
 --   'Lipstick.Block.Inline' text ('HasCrop'). Each thing's text attributes
---   are the base for everything it draws, overridden by anything more
---   specific inside it (a cell style, an item style, the attributes of a
---   placed block).
+--   are the base for what it draws (for a style, only its content: see
+--   'Lipstick.Style.Style'), overridden by anything more specific inside
+--   it (a cell style, an item style, the attributes of a placed block).
 --
--- * a change to the thing's own fields. Modifiers shared by some things go
---   through the classes 'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and
---   'HasWrap'.
+-- * modifiers of fields that several things have go through the classes
+--   'HasBox', 'HasBorder', 'HasSize', 'HasAlign' and 'HasWrap'; the rest,
+--   such as 'Lipstick.Table.cellStyle', belong to one thing.
 --
 -- == Examples
 --
 -- The examples print with 'Lipstick.Terminal.putBlock'; the output is
 -- shown without colours and other attributes.
 --
--- Modifiers of text attributes and of the crop work on anything:
+-- Text attributes work on any thing:
 --
 -- >>> let base = bold <> fg red
 -- >>> putBlock (render (base <> border normalBorder) "a style")

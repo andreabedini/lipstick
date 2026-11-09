@@ -134,9 +134,11 @@ import Lipstick.Width (textWidth)
 -- >>> import Lipstick
 -- >>> import Data.Text qualified as T
 
--- | The fields of a style. Its text attributes are in the common
--- 'Props': they apply to the content and padding, not to the border or
--- margins, which have their own colours ('borderFg', 'marginBg').
+-- | What 'render' and 'frame' draw with, set by a @'Mod' 'Style'@. Its
+-- text attributes apply to the content. The background and reverse video
+-- also fill the padding and alignment space (the background unless
+-- @'colorWhitespace' False@). The border and margins have their own
+-- colours ('borderFg', 'borderBg', 'marginBg').
 data Style = Style
   { styleBox :: !Box
   , styleBorder :: !BorderProps
@@ -185,9 +187,12 @@ tabWidth n = fieldMod (\s -> s {styleTabWidth = max 0 n})
 unsetTabWidth :: Mod Style
 unsetTabWidth = fieldMod (\s -> s {styleTabWidth = styleTabWidth defStyle})
 
--- | Render on a single line: newlines are removed, and padding, margins,
--- border, size and alignment are ignored, except 'maxWidth' and
--- 'maxHeight'.
+-- | No box: padding, margins, border, size and alignment are ignored, but
+-- the 'maxWidth' and 'maxHeight' crops apply. Newlines are removed from
+-- the text, including the text in blocks the style frames, unless
+-- something nearer sets 'unsetInline'. Only text is joined into one line:
+-- blocks inside, such as a 'Lipstick.Block.vcat' or another box, keep
+-- their lines.
 --
 -- >>> putBlock (render (inline <> border normalBorder <> padding 1 1) "one\ntwo")
 -- onetwo
@@ -241,9 +246,9 @@ underlineSpaces v = fieldMod (\s -> s {styleUnderlineSpaces = Just v})
 strikethroughSpaces :: Bool -> Mod Style
 strikethroughSpaces v = fieldMod (\s -> s {styleStrikeSpaces = Just v})
 
--- | A parent style without its padding and margins, to put before a
--- child style: in @inherit parent <> child@, the child gets the parent's
--- settings except the padding and margins, and its own settings win, as
+-- | A parent style without its padding and margin amounts, to put before
+-- a child style: in @inherit parent <> child@, the child gets the
+-- parent's settings except those amounts, and its own settings win, as
 -- with lipgloss's @child.Inherit(parent)@.
 --
 -- >>> let parent = border roundedBorder <> padding 1 4 <> width 20
@@ -260,11 +265,12 @@ inherit (Mod f g) = Mod (\s -> keepSpacing s (f s)) g
     keepSpacing s s' =
       s' {styleBox = (styleBox s') {boxPadding = boxPadding (styleBox s), boxMargin = boxMargin (styleBox s)}}
 
--- | Render text in a box: @frame m ('Lipstick.Block.fromInline' inl)@.
--- The text is word-wrapped to fit inside the padding and border: of the
--- 'width' if one is set, and otherwise of the width the box is given when
--- it is laid out. With 'noWrap', lines that are too long are cut short
--- with an ellipsis instead.
+-- | Text in a box: @render m inl@ is
+-- @'frame' m ('Lipstick.Block.fromInline' inl)@. The text wraps to fit
+-- inside the padding and border, in a box that is its 'width' wide when
+-- there is room for it, and otherwise no wider than the space it is laid
+-- out in. With 'noWrap', lines that are too long are cut short with an
+-- ellipsis instead.
 render :: Mod Style -> Inline -> Block
 render m = frame m . textBlock
 
@@ -412,7 +418,6 @@ layoutBox s props content0 =
       blankLine = blankCells fill innerW
       tall = replicate above blankLine ++ aligned ++ replicate below blankLine
 
-      -- Padding.
       padW = pl + innerW + pr
       padCells = fillCells fill (T.singleton pch)
       padded =
@@ -420,7 +425,6 @@ layoutBox s props content0 =
           ++ [padCells pl ++ l ++ padCells pr | l <- tall]
           ++ replicate pb (padCells padW)
 
-      -- Border.
       sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
       piece a t n = fillCells a t n
       corner a on t n = if on then piece a t n else []
@@ -435,7 +439,6 @@ layoutBox s props content0 =
             ++ [sideL ++ l ++ sideR | l <- padded]
             ++ [bottomRow | edgeBottom edges]
 
-      -- Margins.
       ma = mempty {attrBg = mbg}
       boxW = bl + padW + br
       outerW = ml + boxW + mr
