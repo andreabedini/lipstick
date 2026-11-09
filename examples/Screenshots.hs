@@ -8,6 +8,7 @@ module Main (main) where
 
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
+import Data.Text.IO.Utf8 qualified as Utf8
 import Lipstick
 import Svg (blockSvg)
 import System.Environment (getArgs)
@@ -118,5 +119,5 @@ main = do
   args <- getArgs
   case args of
     ["--ansi", name] | Just b <- lookup name examples -> T.putStrLn (toAnsi defaultRenderEnv b)
-    [dir] -> mapM_ (\(name, b) -> T.writeFile (dir </> name <> ".svg") (blockSvg b)) examples
+    [dir] -> mapM_ (\(name, b) -> Utf8.writeFile (dir </> name <> ".svg") (blockSvg b)) examples
     _ -> die ("usage: lipstick-screenshots DIR | --ansi (" ++ unwords (map fst examples) ++ ")")
