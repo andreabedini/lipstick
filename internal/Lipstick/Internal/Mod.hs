@@ -140,6 +140,7 @@ module Lipstick.Internal.Mod
 
     -- * Wrapping
   , noWrap
+  , unsetNoWrap
   ) where
 
 import Data.Maybe (fromMaybe, isJust)
@@ -230,7 +231,8 @@ class HasAlign f where
   overAlign :: (Align -> Align) -> f -> f
 
 -- | Things whose text can be wrapped: 'Lipstick.Style.Style' and
--- 'Lipstick.Table.Table'. The modifier 'noWrap' applies to them.
+-- 'Lipstick.Table.Table'. The modifiers 'noWrap' and 'unsetNoWrap' apply
+-- to them.
 class HasWrap f where
   overWrap :: (Bool -> Bool) -> f -> f
 
@@ -680,3 +682,7 @@ unsetAlign = fieldMod (overAlign (const defAlign))
 -- | Cut lines that are too long with an ellipsis instead of wrapping them.
 noWrap :: HasWrap f => Mod f
 noWrap = fieldMod (overWrap (const False))
+
+-- | Wrap lines again, even inside a style that sets 'noWrap'.
+unsetNoWrap :: HasWrap f => Mod f
+unsetNoWrap = fieldMod (overWrap (const True))

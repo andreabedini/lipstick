@@ -334,6 +334,7 @@ module Lipstick
   , valign
   , unsetAlign
   , noWrap
+  , unsetNoWrap
 
     -- * Getters
     -- | The settings of a modifier, read back.

@@ -196,6 +196,7 @@ module Lipstick.Mod
 
     -- * Wrapping
   , noWrap
+  , unsetNoWrap
   ) where
 
 import Lipstick.Internal.Mod

@@ -246,7 +246,8 @@ tableLayout ctx m headers rows
   | ncols == 0 = (Request 0 0 0 Nothing False False, \w -> (const (Grid w 0 []), 0, Nothing))
   | otherwise = (req, run)
   where
-    (t, props) = runMod m defTable
+    -- A table starts from the wrapping it inherits, as a style does.
+    (t, props) = runMod m defTable {tableWrap = textWrap ctx}
     (chars, edges) = borderEdges (tableBorder t)
     bp = tableBorder t
     sideAttrs side = mempty {attrFg = side (borderFgColors bp), attrBg = side (borderBgColors bp)}
@@ -266,9 +267,12 @@ tableLayout ctx m headers rows
     -- ellipsis instead of wrapped.
     truncates pos = case pos of
       HeaderCell _ -> True
-      BodyCell _ _ -> not (tableWrap t && textWrap ctx)
+      BodyCell _ _ -> not (tableWrap t)
+    -- A cell that wraps does so even under an inherited noWrap, unless its
+    -- cell style says otherwise.
+    wrapping pos = if truncates pos then mempty else unsetNoWrap
     cellNodes (mk, r) =
-      [ measureIn ctx (frame (tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty) b)
+      [ measureIn ctx (frame (wrapping pos <> tableCellStyle t pos <> stretchHeight <> if truncates pos then noWrap else mempty) b)
       | (c, b) <- zip [0 ..] r
       , let pos = mk c
       ]

@@ -1266,6 +1266,11 @@ inheritanceTests =
         plainLines (frame (align center <> width 8) (hcat ["ab", "cd"])) @?= ["  abcd  "]
     , testCase "noWrap is inherited" $
         plainLines (frame (noWrap <> width 6) (frame mempty (text "abcdefgh"))) @?= ["abcde…"]
+    , testCase "unsetNoWrap wraps again inside a noWrap frame" $ do
+        plainLines (frame (noWrap <> width 6) (frame unsetNoWrap (text "abc def"))) @?= ["abc   ", "def   "]
+        let t m = table (m <> border asciiBorder) [] [["abc def"]]
+        plainLinesAt 5 (frame noWrap (t unsetNoWrap)) @?= plainLinesAt 5 (t mempty)
+        plainLinesAt 5 (frame noWrap (t mempty)) @?= plainLinesAt 5 (t noWrap)
     , testCase "the nearer setting wins" $
         plainLines (frame (align right <> width 6) (frame (align left <> width 6) (text "ab"))) @?= ["ab    "]
     , testCase "settings not set are inherited through nested frames" $
