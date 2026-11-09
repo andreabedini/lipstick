@@ -5,8 +5,8 @@
 -- Everything is placed on the terminal's cell grid: each cluster is drawn
 -- at its column and stretched to exactly its width with @textLength@, and
 -- box-drawing and block characters are drawn as lines and rectangles, as
--- terminals do. The result looks right whatever fonts the viewer has, and
--- is a pure function of the block, so it can be compared in CI.
+-- terminals do. The grid stays aligned whatever fonts the viewer has, and
+-- the result is a pure function of the block, so CI can compare it.
 module Svg (blockSvg) where
 
 import Data.Maybe (fromMaybe)
@@ -76,6 +76,9 @@ blockSvg block =
     cellX col = originX + fromIntegral col * cellW
     cellY row = originY + fromIntegral row * cellH
 
+    -- Each rectangle reaches half a unit into the cells to its right and
+    -- below, so that anti-aliased edges at fractional coordinates leave no
+    -- seams between neighbours.
     backgrounds row cells =
       [ "<rect x=\"" <> num (cellX col) <> "\" y=\"" <> num (cellY row) <> "\" width=\"" <> num (fromIntegral (cellWidth c) * cellW + 0.5) <> "\" height=\"" <> num (cellH + 0.5) <> "\" fill=\"" <> colour <> "\"/>"
       | (col, c) <- cellsAt cells
@@ -275,6 +278,7 @@ drawRounded (hx, vy) x y =
         <> num edgeY
         <> "\" fill=\"none\" stroke-width=\"1.2\"/>"
 
+-- Quadrants overlap slightly, as backgrounds do, to leave no seams.
 drawBlocks :: [Bool] -> Double -> Double -> Text
 drawBlocks quads x y =
   T.concat

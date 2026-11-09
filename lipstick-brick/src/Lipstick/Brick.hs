@@ -5,12 +5,17 @@
 --
 -- Widgets lay their block out in the width brick gives them, and take all
 -- of it ('Greedy') when the block grows. Colours are resolved for the
--- 'RenderEnv' (light or dark background, profile) and handed to vty, which downsamples them further if its output
--- needs it. 'profileForColorMode' gives the profile matching a vty output.
+-- 'RenderEnv' (light or dark background, profile) and handed to vty, which
+-- downsamples them further if its output needs it. 'profileForColorMode'
+-- gives the profile matching a vty output.
 --
 -- vty measures text with its own width tables, which can disagree with
 -- lipstick's for some emoji; layouts made of such characters may be off by
 -- a column.
+--
+-- vty has a single underline style and no underline colour: curly, double,
+-- dotted and dashed underlines become plain ones, and underline colours are
+-- dropped.
 module Lipstick.Brick
   ( blockWidget
   , blockImage
@@ -35,10 +40,10 @@ blockWidget env b = Widget policy Fixed $ do
   where
     policy = if blockGrows b then Greedy else Fixed
 
--- | A vty image of a block, laid out in the environment's 'envWidth', and
--- exactly as wide and tall as the laid-out block. vty has
--- no images zero columns wide, so a block of width 0 gives 'V.emptyImage'
--- whatever its height.
+-- | A vty image of a block laid out in the environment's 'envWidth', as
+-- wide and tall as the laid-out block (but see the note on widths above).
+-- vty has no zero-width images, so a block 0 columns wide gives
+-- 'V.emptyImage' whatever its height.
 blockImage :: RenderEnv -> Block -> V.Image
 blockImage env b = V.vertCat (map line (gridLines (layout (envWidth env) b)))
   where

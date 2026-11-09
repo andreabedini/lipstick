@@ -2,6 +2,9 @@
 
 -- | The examples shown in the README, and their screenshots.
 --
+-- The README repeats each example's code by hand; CI checks only that
+-- docs/images matches this file.
+--
 -- > cabal run -v0 lipstick-screenshots -- docs/images   # write the SVGs
 -- > cabal run -v0 lipstick-screenshots -- --ansi table  # print one example
 module Main (main) where
