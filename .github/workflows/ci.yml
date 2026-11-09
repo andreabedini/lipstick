@@ -150,10 +150,13 @@ jobs:
           cabal-version: ${{ env.CABAL_VERSION }}
           cabal-update: false
 
+      # Every package that cabal sdist makes, found as release-pr finds
+      # them rather than listed here.
       - name: Check the package descriptions
         run: |
-          cabal check
-          (cd lipstick-brick && cabal check)
+          for dir in $(cabal sdist all --list-only | sed -n 's|[^/]*\.cabal$||p' | sort -u); do
+            (cd "$dir" && cabal check)
+          done
 
       - name: Make source distributions
         run: cabal sdist all -o sdist
