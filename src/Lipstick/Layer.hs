@@ -283,6 +283,13 @@ topmostFirst avail layers =
 -- | The topmost named layer covering a column and row, for mouse handling,
 -- with the layers composed in an available width ('Nothing' for their
 -- natural width).
+--
+-- Like 'Lipstick.Block.layout', it lays the composition out on its own, in
+-- the default text settings, and the columns and rows count from its
+-- top-left corner. Where the composition is framed by a style, take off
+-- what is drawn before it; and if that style sets 'Lipstick.Mod.noWrap',
+-- 'Lipstick.Style.tabWidth' or another text setting that changes how the
+-- layers are laid out, the result can differ from what is drawn.
 layerAt :: Maybe Int -> Int -> Int -> [Layer] -> Maybe Text
 layerAt avail x y = fmap fst . layerHit avail x y
 

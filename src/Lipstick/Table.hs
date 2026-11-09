@@ -232,7 +232,9 @@ table m headers rows = Block $ \ctx ->
 -- | The first and last body rows a table shows, laid out in an available
 -- width ('Nothing' for its natural width), as for 'Lipstick.Block.layout';
 -- 'Nothing' when it shows none. All rows unless the table has a
--- 'maxHeight'.
+-- 'maxHeight'. As with 'Lipstick.Block.layout', the table is laid out on
+-- its own: inside a style that sets 'Lipstick.Mod.noWrap' or another text
+-- setting that changes its rows' heights, the rows drawn can differ.
 visibleRows :: Maybe Int -> Mod Table -> [Block] -> [[Block]] -> Maybe (Int, Int)
 visibleRows avail m headers rows = shown
   where
