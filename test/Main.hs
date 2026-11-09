@@ -678,6 +678,9 @@ tableParityTests =
     , testCase "too small for any row" $ do
         visibleRows Nothing (maxHeight 3) ["N"] numbered @?= Nothing
         blockHeight (table (maxHeight 3) ["N"] numbered) @?= 3
+    , testCase "the overflow row only where it fits, keeping the bottom border" $ do
+        plainLines (table (maxHeight 5) ["a"] [["1"], ["2"]]) @?= ["╭─╮", "│a│", "├─┤", "│…│", "╰─╯"]
+        plainLines (table (maxHeight 4) ["a"] [["1"], ["2"]]) @?= ["╭─╮", "│a│", "╰─╯"]
     , testCase "fitContent does not stretch" $
         plainLines (table (width 30 <> fitContent) ["N", "What"] [["0", "row"]])
           @?= ["╭─┬────╮", "│N│What│", "├─┼────┤", "│0│row │", "╰─┴────╯"]

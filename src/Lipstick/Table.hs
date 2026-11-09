@@ -347,29 +347,35 @@ tableLayout ctx m headers rows
           before ! (l + 1) - before ! f
             + rr * max 0 (l - f)
             + (if l < nBody - 1 then (if l >= f then rr else 0) + overflowH ! (l + 1) else 0)
-        (firstV, lastV) = case hgt of
+        -- Lines left for the body under a maxHeight.
+        avail = fmap (\h -> h - length topLines - length headerLines - length headerRuleLines - length bottomLines) hgt
+        (firstV, lastV) = case avail of
           Nothing -> (0, nBody - 1)
-          Just h ->
-            let avail = h - length topLines - length headerLines - length headerRuleLines - length bottomLines
-                f0 = max 0 (min (nBody - 1) (tableYOffset t))
+          Just a ->
+            let f0 = max 0 (min (nBody - 1) (tableYOffset t))
                 l0
                   -- All the rows from f0 fit: no overflow row is needed.
-                  | linesFor f0 (nBody - 1) <= avail = nBody - 1
-                  | otherwise = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= avail) [f0 .. nBody - 1])
+                  | linesFor f0 (nBody - 1) <= a = nBody - 1
+                  | otherwise = last (f0 - 1 : takeWhile (\l -> linesFor f0 l <= a) [f0 .. nBody - 1])
                 f1 =
                   if l0 == nBody - 1
-                    then last (f0 : takeWhile (\f -> linesFor f l0 <= avail) [f0 - 1, f0 - 2 .. 0])
+                    then last (f0 : takeWhile (\f -> linesFor f l0 <= a) [f0 - 1, f0 - 2 .. 0])
                     else f0
              in (f1, l0)
         shownRange = if lastV >= firstV then Just (firstV, lastV) else Nothing
         shown = take (lastV - firstV + 1) (drop firstV bodyLines)
-        overflow = [overflowRow (lastV + 1) | lastV < nBody - 1]
+        -- The overflow row, if there is room for it: when there is not even
+        -- room for that, the rows are left out without it rather than
+        -- cutting off the bottom border.
+        overflow = [overflowRow (lastV + 1) | lastV < nBody - 1, maybe True (linesFor firstV lastV <=) avail]
         body = intercalate [middleRule | tableRowRules t] shown ++ concat [[middleRule | tableRowRules t, not (null shown)] ++ o | o <- overflow]
+        -- No header rule above an empty body, as in a table without rows.
+        headerRuleShown = if null body then [] else headerRuleLines
         -- Up to the minimum height, or the height to stretch to, lines of
         -- empty cells after the body; never past maxHeight, so that the
         -- bottom border stays.
-        drawn = length topLines + length headerLines + length headerRuleLines + length body + length bottomLines
+        drawn = length topLines + length headerLines + length headerRuleShown + length body + length bottomLines
         emptyLine = take 1 (renderRow (cellNodes (BodyCell nBody, replicate ncols (textBlock mempty))))
         tallest h = maybe id min hgt (max (fromMaybe 0 hMin) (if stretch then h else 0))
         filler h = concat (replicate (tallest h - drawn) emptyLine)
-        allLines h = topLines ++ headerLines ++ headerRuleLines ++ body ++ filler h ++ bottomLines
+        allLines h = topLines ++ headerLines ++ headerRuleShown ++ body ++ filler h ++ bottomLines
